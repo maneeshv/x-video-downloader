@@ -1,0 +1,23 @@
+# secrets — never commit
+.dev.vars
+.dev.vars.*
+*.env
+.env*
+cookies*.txt
+cookies*.json
+
+# toolchain
+node_modules/
+.wrangler/
+dist/
+.venv/
+__pycache__/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# claude code local state
+.claude/.cc-writes/
+.claude/settings.local.json
