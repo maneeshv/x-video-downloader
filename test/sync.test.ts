@@ -162,6 +162,26 @@ test("breaker preserves bytes downloaded before the failure", async () => {
   assert.equal((await w.store.getStatus()).totalBytes, r.bytes);
 });
 
+test("breaker preserves bytes before needs_reauth on a dead 401", async () => {
+  let page = 0;
+  const w = world((url) => {
+    if (url.includes("/bookmarks")) {
+      page++;
+      if (page === 1) return { status: 200, body: fx() };
+      return { status: 401, body: {} };
+    }
+    if (url.includes("oauth2/token")) return { status: 400, body: {} };
+    return routes(fx())(url);
+  });
+  await authed(w.store);
+  const r = await sync(w.d, { backfill: true });
+  assert.equal(r.skipped, "needs_reauth");
+  const s = await w.store.getStatus();
+  assert.equal(s.totalBytes, r.bytes);
+  assert.ok(s.totalBytes! > 0);
+  assert.equal(s.auth, "needs_reauth");
+});
+
 test("alert retries the Telegram send until it succeeds before marking the key", async () => {
   let tgCalls = 0;
   const w = world((url) => {

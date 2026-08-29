@@ -111,6 +111,10 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
 
 async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResult> {
   const t = now(d);
+  // Fold bytes downloaded before the failure into totalBytes first, so every exit path
+  // below (including needsReauth's early return on a dead 401) accounts for them.
+  const s = await d.store.getStatus();
+  await d.store.patchStatus({ totalBytes: (s.totalBytes ?? 0) + res.bytes });
   if (e.status === 401) {
     const access = await ensureAccessToken(d, true);
     if (!access) return needsReauth(d, res);
@@ -121,8 +125,7 @@ async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResu
     await d.store.pause(t + PAUSE_MS_AUTH);
     await alert(d, "api_403", `403 from X on ${e.path}; paused 24h. Check console.x.com credits/app.`);
   }
-  const s = await d.store.getStatus();
-  await d.store.patchStatus({ lastRun: iso(t), lastError: e.message, totalBytes: (s.totalBytes ?? 0) + res.bytes });
+  await d.store.patchStatus({ lastRun: iso(t), lastError: e.message });
   return { ...res, error: e.message };
 }
 
