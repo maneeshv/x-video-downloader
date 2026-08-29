@@ -16,6 +16,7 @@ Updated: 2026-08-29
 - Step 3's deploy/OAuth steps need the owner's X app credentials (step 2).
 
 ## Done recently
+- 2026-08-29 `docs/runbooks/agent-setup.md` (teammate/new-machine setup); CLAUDE.md rule 7 (private agent memory holds pointers only).
 - 2026-08-29 ADR-0008: single Worker, fetch + download in one cron run, no Queue (was only implicit).
 - 2026-08-29 Owner asked for a bookmark index + future search UI → ADR-0007 (D1 table `bookmarks`, R2 stays the ledger); spec revised again.
 - 2026-08-29 Installed the Cloudflare Claude Code plugin (skills + 5 MCP servers, user scope); owner to run `/reload-plugins`.

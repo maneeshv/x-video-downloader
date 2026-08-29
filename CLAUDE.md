@@ -9,6 +9,7 @@ sessions. The docs are the agent's memory; keeping them true is part of every ta
 ## Stack facts
 - Runtime: Cloudflare Workers (TypeScript, `wrangler`). See `docs/ARCHITECTURE.md`.
 - Package manager: `npm` for the Worker. `uv` for any Python tooling (owner preference).
+- New machine or teammate: `docs/runbooks/agent-setup.md` (plugins live at user scope, not in the repo).
 - Product code: none yet — project is in design. Do not write product code until
   `docs/STATUS.md` says a plan is approved for execution.
 
