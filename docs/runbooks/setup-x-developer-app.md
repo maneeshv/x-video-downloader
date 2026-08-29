@@ -7,13 +7,20 @@ When: once, before first deploy; again only if the app is deleted | Last verifie
 3. In the default pay-per-use project, create an App. Under **User authentication settings**:
    - Type: **Web App, Automated App or Bot** (confidential client).
    - App permissions: Read.
-   - Callback URL: `https://<worker-name>.<account>.workers.dev/oauth/callback` (exact match; add the custom-domain variant too if one is used later).
+   - Callback URL: `https://<worker-name>.<account>.workers.dev/oauth/callback` (exact match; add the custom-domain variant too if one is used later). For this deploy: `https://x-downloader.x-downloader.workers.dev/oauth/callback`.
    - Website URL: the same Worker origin.
 4. Save the **Client ID** and **Client Secret** somewhere private (password manager). They go into the Worker via:
    ```
    wrangler secret put X_CLIENT_ID
    wrangler secret put X_CLIENT_SECRET
    ```
+
+**Note (2026-08-30):** the app must supply the **OAuth 2.0 Client ID + Client Secret** from *User
+authentication settings* (steps 3–4 above) — this is a separate credential pair from the app's
+OAuth 1.0a "API Key and Secret" (Keys and tokens tab) and from the app-only Bearer Token. Neither
+of those two can read bookmarks; only the OAuth 2.0 confidential-client flow can. `.env` in this
+repo currently holds the OAuth 1.0a pair and the bearer token, not the OAuth 2.0 client — see
+`docs/STATUS.md` Blocked.
 5. After the Worker is deployed and Cloudflare Access is attached, open `https://<worker>/oauth/start` in a browser, log in through Access, approve the X consent screen (scopes: `bookmark.read tweet.read users.read offline.access`). The Worker stores the tokens in KV and caches your user id.
 
 ## Verify
