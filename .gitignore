@@ -5,6 +5,7 @@
 .env*
 cookies*.txt
 cookies*.json
+wrangler.toml
 
 # toolchain
 node_modules/
@@ -12,6 +13,7 @@ node_modules/
 dist/
 .venv/
 __pycache__/
+worker-configuration.d.ts
 
 # os / editor
 .DS_Store
@@ -21,3 +23,4 @@ __pycache__/
 # claude code local state
 .claude/.cc-writes/
 .claude/settings.local.json
+.superpowers/

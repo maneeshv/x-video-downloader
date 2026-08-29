@@ -1,7 +1,7 @@
 Updated: 2026-08-29
 
 ## Now
-- Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29), Tasks 1–8, TDD, subagent-driven. Product code is now allowed.
+- Task 1 (scaffold) done. Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29); Task 2 next, then 3–8, TDD, subagent-driven. Product code is now allowed.
 
 ## Next
 1. Task 9 of the plan: create R2/KV/D1, migrate, deploy, enable Access, secrets, X callback URL, `/oauth/start`, one `/backfill`.

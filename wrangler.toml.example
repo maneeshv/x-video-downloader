@@ -1,0 +1,28 @@
+name = "x-downloader"
+main = "src/index.ts"
+compatibility_date = "2026-08-29"
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[observability]
+enabled = true
+
+[vars]
+TEAM_DOMAIN = "https://<team>.cloudflareaccess.com"   # Zero Trust team domain
+POLICY_AUD = "<aud-tag-of-the-access-application>"
+PUBLIC_ORIGIN = "https://x-downloader.<account>.workers.dev"   # exact Worker origin; the OAuth callback URL is derived from it
+
+[[r2_buckets]]
+binding = "VIDEOS"
+bucket_name = "x-downloader-videos"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "<kv-namespace-id>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "x-downloader"
+database_id = "<d1-database-id>"
+migrations_dir = "migrations"
