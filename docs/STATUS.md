@@ -1,7 +1,7 @@
 Updated: 2026-08-29
 
 ## Now
-- Tasks 1–3 done (scaffold, limits, bookmarks parser). Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29); Task 4 next, then 5–8, TDD, subagent-driven. Product code is now allowed.
+- Tasks 1–4 done (scaffold, limits, bookmarks parser, OAuth/API calls). Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29); Task 5 next, then 6–8, TDD, subagent-driven. Product code is now allowed.
 
 ## Next
 1. Task 9 of the plan: create R2/KV/D1, migrate, deploy, enable Access, secrets, X callback URL, `/oauth/start`, one `/backfill`.
@@ -14,6 +14,7 @@ Updated: 2026-08-29
 - Enabling Cloudflare Access on the workers.dev route is a dashboard click (owner, or agent via the authenticated Cloudflare MCP once `/mcp` is authorized).
 
 ## Done recently
+- 2026-08-29 Task 4: OAuth 2.0 PKCE + token exchange/refresh + fetchMe/fetchBookmarks (`src/x.ts`), `test/x.oauth.test.ts`, `test/fakes.ts` (fakeFetch + fixture loader).
 - 2026-08-29 Task 3: bookmarks parser (selectVariant, parseBookmarks) with fixture and TDD tests.
 - 2026-08-29 Task 2: limits.ts with 19 hard caps and X API constants (ADR-0005 compile-time design).
 - 2026-08-29 Task 1 typecheck split: Node globals scoped to `tsconfig.test.json` only (`src/` stays workerd-only); stale JOURNAL line fixed; ADR-0006 amended again.
