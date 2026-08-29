@@ -15,14 +15,16 @@ const iso = (ms: number) => new Date(ms).toISOString();
 export async function alert(d: Deps, key: string, text: string): Promise<void> {
   const s = await d.store.getStatus();
   if (s.alerts?.[key]) return;
+  if (d.cfg.telegram) {
+    const { token, chatId } = d.cfg.telegram;
+    // https://core.telegram.org/bots/api#sendmessage — send before marking, so a failed send is retried next time.
+    const ok = await d.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: `x-downloader: ${text}` }),
+    }).then((r) => r.ok).catch(() => false);
+    if (!ok) return;
+  }
   await d.store.patchStatus({ alerts: { ...s.alerts, [key]: iso(now(d)) } });
-  if (!d.cfg.telegram) return;
-  const { token, chatId } = d.cfg.telegram;
-  // https://core.telegram.org/bots/api#sendmessage
-  await d.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: `x-downloader: ${text}` }),
-  }).catch(() => undefined);
 }
 
 export async function clearAlert(d: Deps, key: string): Promise<void> {
@@ -86,13 +88,17 @@ async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
 async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number }): Promise<void> {
   if (!it.hasVideoMedia) return d.store.upsertBookmark(row(it, "no_video", d));
   if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
+  // Spec §5: failed rows are not retried unless the error is transient (http_5xx).
+  const prev = await d.store.getBookmark(it.postId);
+  if (prev?.status === "failed" && !prev.error?.startsWith("http_5")) return;
   let bytes = 0, complete = true, fail: Dl | null = null;
   for (const v of it.videos) {
     const head = await d.store.r2.head(v.key);
     if (head) { bytes += head.size; continue; }
     if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) { complete = false; continue; }
     budget.downloads++;
-    const r = await download(d, it, v);
+    let r: Dl;
+    try { r = await download(d, it, v); } catch { r = { ok: false, status: "pending", error: "exception" }; }
     if (r.ok) { bytes += r.bytes; res.downloaded++; res.bytes += r.bytes; }
     else { complete = false; fail = r; res.failed++; }
     const [lo, hi] = DOWNLOAD_JITTER_MS;
@@ -115,22 +121,24 @@ async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResu
     await d.store.pause(t + PAUSE_MS_AUTH);
     await alert(d, "api_403", `403 from X on ${e.path}; paused 24h. Check console.x.com credits/app.`);
   }
-  await d.store.patchStatus({ lastRun: iso(t), lastError: e.message });
+  const s = await d.store.getStatus();
+  await d.store.patchStatus({ lastRun: iso(t), lastError: e.message, totalBytes: (s.totalBytes ?? 0) + res.bytes });
   return { ...res, error: e.message };
 }
 
 export async function sync(d: Deps, o: { backfill?: boolean } = {}): Promise<SyncResult> {
   const res: SyncResult = { pages: 0, seen: 0, downloaded: 0, failed: 0, bytes: 0 };
   if ((await d.store.getPausedUntil()) > now(d)) return { ...res, skipped: "paused" };
-  const access = await ensureAccessToken(d);
-  const userId = await d.store.getUserId();
-  if (!access || !userId) return needsReauth(d, res);
 
   const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
   const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
   const budget = { downloads: 0 };
   let paginationToken: string | undefined, resultCount = 0, sawMedia = false;
   try {
+    const access = await ensureAccessToken(d);
+    const userId = await d.store.getUserId();
+    if (!access || !userId) return needsReauth(d, res);
+
     for (let page = 0; page < maxPages; page++) {
       const body = await fetchBookmarks(d.fetch, access, userId, { maxResults: pageSize, paginationToken });
       res.pages++;
@@ -146,6 +154,7 @@ export async function sync(d: Deps, o: { backfill?: boolean } = {}): Promise<Syn
     }
   } catch (e) {
     if (e instanceof XApiError) return breaker(d, e, res);
+    await d.store.patchStatus({ lastRun: iso(now(d)), lastError: String(e) });
     throw e;
   }
 
@@ -158,6 +167,6 @@ export async function sync(d: Deps, o: { backfill?: boolean } = {}): Promise<Syn
     lastRun: iso(now(d)), lastError: null, auth: "ok", totalBytes, noMediaRuns,
     counts: { seen: res.seen, downloaded: res.downloaded, failed: res.failed, pages: res.pages },
   });
-  for (const k of ["needs_reauth", "api_401", "api_403", "api_429"]) await clearAlert(d, k);
+  for (const k of ["needs_reauth", "api_403", "api_429"]) await clearAlert(d, k);
   return res;
 }

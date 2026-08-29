@@ -120,6 +120,62 @@ test("video too large → failed/too_large, nothing stored; 5xx → pending/http
   assert.equal(r.downloaded, 0); assert.equal(r.failed, 2); assert.equal(w.r2.objects.size, 0);
   assert.deepEqual([(await w.store.getBookmark("1000000000000000001"))!.status, (await w.store.getBookmark("1000000000000000001"))!.error], ["failed", "too_large"]);
   assert.deepEqual([(await w.store.getBookmark("1000000000000000002"))!.status, (await w.store.getBookmark("1000000000000000002"))!.error], ["pending", "http_503"]);
+
+  // permanently failed (too_large) must not be retried; transiently failed (http_503) must be
+  const highCallsBefore = w.f.calls.filter(([u]) => u.includes("1_high")).length;
+  const gifCallsBefore = w.f.calls.filter(([u]) => u.includes("/2.mp4")).length;
+  const r2 = await sync(w.d);
+  assert.equal(r2.downloaded, 0);
+  assert.equal(w.f.calls.filter(([u]) => u.includes("1_high")).length, highCallsBefore, "permanently failed item not re-fetched");
+  assert.equal(w.f.calls.filter(([u]) => u.includes("/2.mp4")).length, gifCallsBefore + 1, "transient failure is retried");
+  assert.deepEqual([(await w.store.getBookmark("1000000000000000001"))!.status, (await w.store.getBookmark("1000000000000000001"))!.error], ["failed", "too_large"]);
+});
+
+test("non-XApiError throw during download does not abort the run", async () => {
+  const b = fx(); b.data = b.data.slice(0, 2); b.meta.result_count = 2;
+  const w = world(routes(b, (url) => {
+    if (url.includes("1_high")) throw new Error("boom");
+    return mp4();
+  }));
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
+  const st1 = await w.store.getBookmark("1000000000000000001");
+  assert.deepEqual([st1!.status, st1!.error], ["pending", "exception"]);
+  assert.equal((await w.store.getBookmark("1000000000000000002"))!.status, "downloaded");
+  assert.ok((await w.store.getStatus()).lastRun);
+});
+
+test("breaker preserves bytes downloaded before the failure", async () => {
+  let page = 0;
+  const w = world((url) => {
+    if (url.includes("/bookmarks")) {
+      page++;
+      if (page === 1) return { status: 200, body: fx() };
+      return { status: 429, body: {}, headers: { "x-rate-limit-reset": String(NOW / 1000 + 900) } };
+    }
+    return routes(fx())(url);
+  });
+  await authed(w.store);
+  const r = await sync(w.d, { backfill: true });
+  assert.ok(r.bytes > 0);
+  assert.equal((await w.store.getStatus()).totalBytes, r.bytes);
+});
+
+test("alert retries the Telegram send until it succeeds before marking the key", async () => {
+  let tgCalls = 0;
+  const w = world((url) => {
+    if (url.includes("api.telegram.org")) { tgCalls++; return { status: tgCalls === 1 ? 500 : 200, body: {} }; }
+    if (url.includes("oauth2/token")) return { status: 400, body: {} };
+    return routes(fx())(url);
+  });
+  await w.store.putTokens({ access: "A", refresh: "R", prevRefresh: "P", expiresAt: NOW }); await w.store.putUserId("u1");
+  await sync(w.d);
+  assert.equal((await w.store.getStatus()).alerts?.needs_reauth, undefined, "not marked when send failed");
+  await w.store.clearPause();
+  await sync(w.d);
+  assert.equal(tgCalls, 2);
+  assert.ok((await w.store.getStatus()).alerts?.needs_reauth, "marked once send succeeds");
 });
 
 test("backfill paginates with max_results=90 until no next_token", async () => {
