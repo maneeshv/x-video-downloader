@@ -23,6 +23,18 @@ function deps(env: AppEnv, f: Fetch): Deps {
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 
+// R2 (and miniflare) populate obj.range unconditionally on a GET — even a plain request
+// gets {offset: 0, length: size} back — so whether to answer 206 must come from the request,
+// not from obj.range's presence. This also covers every R2Range shape (offset+length,
+// offset-only, suffix-only) rather than assuming the fake's/R2's default shape.
+function servedRange(obj: R2ObjectBody): { offset: number; length: number } {
+  const r = obj.range;
+  if (!r) return { offset: 0, length: obj.size };
+  if ("suffix" in r) return { offset: obj.size - r.suffix, length: r.suffix };
+  const offset = r.offset ?? 0;
+  return { offset, length: r.length ?? obj.size - offset };
+}
+
 async function video(store: Store, key: string, req: Request): Promise<Response> {
   if (!VIDEO_KEY_RE.test(key)) return new Response("not found", { status: 404 });
   const obj = await store.getVideo(key, req.headers);
@@ -31,13 +43,14 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
   obj.writeHttpMetadata(headers);
   headers.set("etag", obj.httpEtag);
   headers.set("accept-ranges", "bytes");
-  if (!("body" in obj)) return new Response(null, { status: 412, headers });
-  const r = obj.range;
-  // R2Range is a 3-way union ({offset,length?} | {offset?,length} | {suffix}); narrowing on
-  // "offset" in r alone still leaves r.offset possibly undefined (2nd variant) — check both.
-  if (r && "offset" in r && r.offset !== undefined && r.length !== undefined) {
-    headers.set("content-range", `bytes ${r.offset}-${r.offset + r.length - 1}/${obj.size}`);
-    headers.set("content-length", String(r.length));
+  // R2's onlyIf drops the body when the conditional matches — that's a cache-revalidation
+  // success (304 for If-None-Match), not a precondition failure (412) — reserve 412 for
+  // other onlyIf mismatches (e.g. If-Match / uploadedBefore).
+  if (!("body" in obj)) return new Response(null, { status: req.headers.has("if-none-match") ? 304 : 412, headers });
+  if (req.headers.has("range")) {
+    const { offset, length } = servedRange(obj);
+    headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${obj.size}`);
+    headers.set("content-length", String(length));
     return new Response(obj.body, { status: 206, headers });
   }
   headers.set("content-length", String(obj.size));
@@ -56,7 +69,12 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
 
   if (url.pathname === "/") return new Response(renderIndex(await store.listDownloaded(), await store.getStatus()), { headers: { "content-type": "text/html; charset=utf-8" } });
-  if (url.pathname.startsWith("/v/")) return video(store, decodeURIComponent(url.pathname.slice(3)), req);
+  if (url.pathname.startsWith("/v/")) {
+    let key: string;
+    try { key = decodeURIComponent(url.pathname.slice(3)); }
+    catch { return new Response("not found", { status: 404 }); }
+    return video(store, key, req);
+  }
   if (url.pathname === "/status") return json({ ...(await store.getStatus()), pausedUntil: await store.getPausedUntil(), userId: await store.getUserId() });
   if (url.pathname === "/oauth/start") {
     const state = randomToken(16), verifier = randomToken(64);

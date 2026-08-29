@@ -60,23 +60,26 @@ export class FakeR2 {
     this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "" });
     return { key, size: bytes.byteLength };
   }
-  async get(key: string, opts: { range?: Headers } = {}) {
+  async get(key: string, opts: { range?: Headers; onlyIf?: Headers } = {}) {
     const o = this.objects.get(key);
     if (!o) return null;
+    const httpEtag = `"${key}"`;
     const m = /bytes=(\d+)-(\d*)/.exec(opts.range?.get("range") ?? "");
     const start = m ? Number(m[1]) : 0,
       end = m && m[2] ? Number(m[2]) + 1 : o.bytes.byteLength;
-    const slice = o.bytes.slice(start, end);
-    return {
+    const base = {
       key,
       size: o.bytes.byteLength,
-      httpEtag: `"${key}"`,
-      body: new Response(slice).body,
-      range: m ? { offset: start, length: end - start } : undefined,
+      httpEtag,
+      // real R2 always reports the served range, {0, size} for a plain GET — not just on Range requests.
+      range: { offset: start, length: end - start },
       writeHttpMetadata: (h: Headers) => {
         h.set("content-type", o.contentType);
       },
     };
+    // real R2 drops the body when an onlyIf conditional matches (e.g. If-None-Match hit).
+    if (opts.onlyIf?.get("if-none-match") === httpEtag) return base;
+    return { ...base, body: new Response(o.bytes.slice(start, end)).body };
   }
   asR2(): R2Bucket {
     return this as unknown as R2Bucket;

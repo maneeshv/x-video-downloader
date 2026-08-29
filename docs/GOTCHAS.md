@@ -20,3 +20,4 @@ Curated, topic-grouped facts a future session could re-trip on. Not a log: JOURN
 ## Tooling (Claude Code on this repo)
 - 2026-08-29: The Bash sandbox blocks writes inside `.git` and `~/.claude/*`. `git commit`, `git init`, and `claude plugin install` each need one unsandboxed run (or `/sandbox` allow `.git`). Baked into: `docs/runbooks/agent-setup.md` step 5.
 - 2026-08-29: After installing a plugin, `/reload-plugins` (or restart) before its skills/MCPs appear; authenticated MCPs OAuth on first tool use via `/mcp`. Baked into: `docs/runbooks/agent-setup.md` steps 2 and 6.
+- 2026-08-30: `node --test` shares one module graph per test FILE, so module-level caches (e.g. the JWKS cache in src/access.ts) persist across test() blocks — use distinct cache keys (random `kid`/team domain) per test. Baked into: test/index.test.ts, test/access.test.ts.

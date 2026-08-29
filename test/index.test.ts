@@ -67,6 +67,8 @@ test("/v/:key streams from R2 with Range support and rejects bad keys", async ()
   const full = await a.get("/v/12345.mp4");
   assert.equal(full.status, 200);
   assert.equal(full.headers.get("content-type"), "video/mp4");
+  assert.equal(full.headers.get("content-length"), "5");
+  assert.equal(full.headers.get("content-range"), null, "a plain GET is not a 206, even though R2 reports a range internally");
   assert.equal((await full.arrayBuffer()).byteLength, 5);
   const part = await a.get("/v/12345.mp4", { range: "bytes=1-2" });
   assert.equal(part.status, 206);
@@ -75,6 +77,16 @@ test("/v/:key streams from R2 with Range support and rejects bad keys", async ()
   assert.deepEqual([...new Uint8Array(await part.arrayBuffer())], [2, 3]);
   assert.equal((await a.get("/v/missing.mp4")).status, 404);
   assert.equal((await a.get("/v/..%2Fsecret")).status, 404);
+  assert.equal((await a.get("/v/%")).status, 404, "an undecodable key 404s instead of throwing");
+});
+
+test("/v/:key revalidation: If-None-Match hit → 304 with no body", async () => {
+  const a = await app();
+  await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
+  const res = await a.get("/v/12345.mp4", { "if-none-match": '"12345.mp4"' });
+  assert.equal(res.status, 304);
+  assert.equal((await res.arrayBuffer()).byteLength, 0);
+  assert.equal(res.headers.get("etag"), '"12345.mp4"');
 });
 
 test("html escapes text", async () => {
