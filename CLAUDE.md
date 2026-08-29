@@ -20,6 +20,9 @@ sessions. The docs are the agent's memory; keeping them true is part of every ta
 5. Library/API facts come from Context7 MCP or cited URLs, not memory.
 6. Use the superpowers skills: brainstorming before design, writing-plans before code,
    TDD while coding, verification before claiming done.
+7. Per-user agent memory (`~/.claude/...`) is not shared with teammates. It may hold only
+   pointers and personal preferences. Any project fact that exists only there is a bug: move
+   it into `docs/` in the same session.
 
 ## Session protocol
 START (mandatory, in order):
