@@ -7,6 +7,7 @@ Curated, topic-grouped facts a future session could re-trip on. Not a log: JOURN
 - 2026-08-29: Reads are deduplicated per 24 h UTC day per Post, so polling cadence barely affects cost (≈ $0.70/mo). The cheaper "Owned Reads" rate may **not** yet apply to bookmarks ($0.005 instead of $0.001) — check the first console usage report. Source: `docs/research/2026-08-29-x-api-v2.md`. Baked into: spec §6/§9; not verified in production yet.
 
 ## X media
+- 2026-08-29: `video.twimg.com/*.mp4` URLs are fetchable **anonymously** (no auth), expose `Content-Length` and `Accept-Ranges`. Live-tested with curl. Source: `docs/research/2026-08-29-persona-x-scraper.md`. Baked into: `src/sync.ts` `download()` relies on it; not commented in code.
 - 2026-08-29: `animated_gif` media variants shape is unverified; parser must tolerate absence. Source: spec §9. Baked into: not yet — watch `src/x.ts` `parseBookmarks`/`selectVariant` if a real `animated_gif` bookmark ever misparses.
 
 ## Cloudflare
