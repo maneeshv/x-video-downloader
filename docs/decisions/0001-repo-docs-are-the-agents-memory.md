@@ -1,5 +1,5 @@
 # 0001. Repo docs are the agent's memory
-Date: 2026-08-29 | Status: DECIDED | Supersedes: — | Evidence: docs/research/2026-08-29-persona-repo-designer.md
+Date: 2026-08-29 | Status: DECIDED; amended 2026-08-29 — `docs/GOTCHAS.md` added as a single curated, pruned file (still no `memory/` directory of one-fact files; rationale in `docs/STANDARDS.md` "Gotchas lifecycle") | Supersedes: — | Evidence: docs/research/2026-08-29-persona-repo-designer.md
 
 ## Context
 No human writes code here; an AI agent works across many sessions with no shared context between them. The owner requires that every decision, piece of product context, and progress marker be captured in the repo so any session can continue without re-briefing. Agent-side memory (outside the repo) is invisible to other agents, to the owner, and to anyone who clones the repo.

@@ -18,7 +18,7 @@ sessions. The docs are the agent's memory; keeping them true is part of every ta
 2. Absolute imports only (owner preference).
 3. No new dependency without an ADR in `docs/decisions/`.
 4. Absolute dates (`YYYY-MM-DD`) everywhere. Never "yesterday", "recently", "now".
-5. Library/API facts come from Context7 MCP or cited URLs, not memory.
+5. Library/API facts come from Context7 MCP, the `cloudflare-docs` MCP, or cited URLs, not memory.
 6. Use the superpowers skills: brainstorming before design, writing-plans before code,
    TDD while coding, verification before claiming done.
 7. Per-user agent memory (`~/.claude/...`) is not shared with teammates. It may hold only
@@ -30,11 +30,13 @@ START (mandatory, in order):
 1. Read `docs/STATUS.md` — what is in flight, what is next, what is blocked.
 2. Read the top 3 entries of `docs/JOURNAL.md`.
 3. Read `docs/QUESTIONS.md` — never silently re-decide an open question.
-4. Read the spec/plan that STATUS points to, if working on it.
+4. Read `docs/GOTCHAS.md` — facts a session could re-trip on (curated, short).
+5. Read the spec/plan that STATUS points to, if working on it.
 Skip PRODUCT/ARCHITECTURE unless unfamiliar or changing them.
 
 END (before saying "done"):
 1. Prepend an entry to `docs/JOURNAL.md` (template in `docs/STANDARDS.md`).
+   Its "Learned / gotcha" line: anything that outlives the session → also `docs/GOTCHAS.md`.
 2. Rewrite `docs/STATUS.md` so Now / Next / Blocked are true as of today.
 3. Non-obvious choice made → new ADR. Choice deferred → line in `docs/QUESTIONS.md`.
    Owner asks "why is it done this way?" and the answer is not already an ADR → that is a
@@ -48,6 +50,7 @@ END (before saying "done"):
 | `docs/STATUS.md` | Single source of truth for now/next/blocked. Overwritten each session. |
 | `docs/JOURNAL.md` | Append-only session log, newest first. |
 | `docs/QUESTIONS.md` | Open questions for the owner. Resolved → ADR, then deleted here. |
+| `docs/GOTCHAS.md` | Curated re-trip facts. Promoted from JOURNAL; deleted once code/runbook encodes them. |
 | `docs/PRODUCT.md` | Why it exists, scope, non-goals, constraints. Slow-changing. |
 | `docs/ARCHITECTURE.md` | The system as built. Rewritten when reality changes. |
 | `docs/STANDARDS.md` | Code + doc conventions and templates. |

@@ -15,10 +15,13 @@ Conventions for code and docs in this repo. `CLAUDE.md` links here; keep that fi
 | `docs/PRODUCT.md` | Slow-changing. Edit only when scope/goals change (and say so in JOURNAL). | — |
 | `docs/research/YYYY-MM-DD-topic.md` | Frozen evidence with sources. Cited by ADRs and specs. | — |
 | `docs/runbooks/task.md` | Carries `Last verified: YYYY-MM-DD`. Older than 90 days → re-run before trusting. | — |
+| `docs/GOTCHAS.md` | **Curated and pruned.** Topic-grouped facts a session could re-trip on. Promoted from JOURNAL; deleted once code or a runbook encodes them. | — |
 
 A marker in the wrong file is a bug (e.g. `DECIDED` outside an ADR).
 
 **ADR vs journal line:** write an ADR if a future agent could reasonably choose otherwise and be wrong (dependencies, storage, auth, API shape, cadence). Everything else is a journal line.
+
+**Gotchas lifecycle.** A JOURNAL "Learned / gotcha" that matters beyond its session is promoted to `docs/GOTCHAS.md` in the same session (date, fact, source, "baked into"). JOURNAL entries scroll out of the START read window; GOTCHAS does not. A line is **deleted** once code (a constant with a provenance comment, a test) or a runbook encodes it — a spec or ADR mention alone is not enough, because specs are only reread when worked on. GOTCHAS is not a memory dump: if it passes ~40 lines, prune before adding.
 
 **One truth per fact.** "What's next" lives only in STATUS. Rationale lives only in ADRs. Facts about services live only in research docs (with URLs). Don't restate; link.
 
