@@ -32,7 +32,7 @@ Every route (including `/oauth/callback`) requires header `cf-access-jwt-asserti
 `verifyAccessJwt` (`src/access.ts`, ADR-0004) against `TEAM_DOMAIN`/`POLICY_AUD` — missing or
 invalid JWT → 403 before any other logic runs.
 - `GET /` — `renderIndex()` (`src/html.ts`) over `store.listDownloaded()` (≤500 rows, `status='downloaded'`) + `store.getStatus()`.
-- `GET /v/:key` — streams a video from R2. `key` must match `VIDEO_KEY_RE` (`src/limits.ts`) or 404. Supports `Range` (206 + `Content-Range`, via `servedRange()` which normalizes all three `R2Range` shapes) and conditional revalidation: 304 when the request carried If-None-Match or If-Modified-Since and R2 dropped the body; 412 otherwise; 416 on an unsatisfiable Range (R2 throws, and `video()` catches it — no size available cheaply for `Content-Range`). Malformed `%`-escapes in the key 404 instead of throwing.
+- `GET /v/:key` — streams a video from R2. `key` must match `VIDEO_KEY_RE` (`src/limits.ts`) or 404. Supports `Range` (206 + `Content-Range`, via `servedRange()` which normalizes all three `R2Range` shapes) and conditional revalidation: 304 when the request carried If-None-Match or If-Modified-Since and R2 dropped the body; 412 otherwise; 416 only when the request carried a Range header and R2 rejected it (any other `getVideo` throw propagates instead of being reported as a client-facing 416). Malformed `%`-escapes in the key 404 instead of throwing.
 - `GET /status` — JSON `Status` (`src/store.ts`) plus `pausedUntil`, `userId`.
 - `GET /oauth/start` — generates PKCE verifier/challenge + `state`, stores verifier in KV (`pkce:<state>`, 600s TTL), 302 to X's authorize URL (`X_SCOPES = "bookmark.read tweet.read users.read offline.access"`).
 - `GET /oauth/callback` — exchanges `code`+PKCE verifier for tokens (`exchangeCode`), stores tokens (KV `oauth`), fetches and stores the X user id (KV `userId`), clears any pause, sets `status.auth = "ok"`, 302 to `/`.
@@ -75,4 +75,5 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 ## Related ADRs
 0002 (official X API), 0003 (R2 key as download ledger), 0004 (Access-gated route, no public
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
---test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue).
+--test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
+0009 (refuse unknown-length video bodies instead of buffering).

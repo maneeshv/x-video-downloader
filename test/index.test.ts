@@ -104,6 +104,11 @@ test("/v/:key: an unsatisfiable Range 416s", async () => {
   assert.equal(res.status, 416);
 });
 
+test("/v/:key: a non-Range R2 fault propagates instead of becoming a 416", async () => {
+  const a = await app();
+  await assert.rejects(a.get("/v/99999.mp4"));
+});
+
 test("html escapes text", async () => {
   const { renderIndex } = await import("#src/html");
   const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "" }], {});

@@ -39,9 +39,12 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
   if (!VIDEO_KEY_RE.test(key)) return new Response("not found", { status: 404 });
   let obj: R2ObjectBody | R2Object | null;
   try { obj = await store.getVideo(key, req.headers); }
-  // R2 throws on an unsatisfiable Range (start ≥ size); we don't have the object's size cheaply
-  // here (that throw is exactly what prevented us from getting it), so a plain 416.
-  catch { return new Response(null, { status: 416 }); }
+  catch (e) {
+    // R2 throws on an unsatisfiable Range (start ≥ size); only a Range request can hit that, so
+    // any other throw (a real R2/network fault) must propagate instead of being reported as 416.
+    if (!req.headers.has("range")) throw e;
+    return new Response(null, { status: 416 });
+  }
   if (!obj) return new Response("not found", { status: 404 });
   const headers = new Headers();
   obj.writeHttpMetadata(headers);

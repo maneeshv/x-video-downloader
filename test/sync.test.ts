@@ -160,6 +160,18 @@ test("multi-video post with one permanently failed video: the stored sibling is 
   assert.equal(videoCalls(), before, "neither video is refetched on rerun");
 });
 
+test("multi-video post where the FIRST video permanently fails: r2_key points at the stored (second) key", async () => {
+  const b = fx(); b.data = b.data.slice(3, 4); b.meta.result_count = 1;
+  const w = world(routes(b, (url) => (url.includes("4a.mp4") ? { status: 404, body: {} } : mp4())));
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
+  const row = await w.store.getBookmark("1000000000000000004");
+  assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-2.mp4"]);
+  assert.ok(w.r2.objects.has("1000000000000000004-2.mp4"), "the stored key is actually in R2");
+  assert.equal(w.r2.objects.has("1000000000000000004-1.mp4"), false);
+});
+
 test("non-XApiError throw during download does not abort the run", async () => {
   const b = fx(); b.data = b.data.slice(0, 2); b.meta.result_count = 2;
   const w = world(routes(b, (url) => {

@@ -1,7 +1,7 @@
 Updated: 2026-08-30
 
 ## Now
-- Final review fixes landed on `v1-worker` (304/416 conditional-GET semantics, unknown-length download bodies refused outright, multi-video partial-download rows, minors) — 41/41 tests pass, typecheck clean, branch is ready to merge to `main`. See `docs/ARCHITECTURE.md` (as built).
+- Final review fixes + re-review fix landed on `v1-worker` (304/416 conditional-GET semantics, unknown-length download bodies refused outright per ADR-0009, multi-video partial-download rows pointing at the actually-stored key, minors) — 43/43 tests pass, typecheck clean, branch is ready to merge to `main`. See `docs/ARCHITECTURE.md` (as built).
 - Deployed but dormant: `https://x-downloader.x-downloader.workers.dev` is live (R2/KV/D1 created and bound, D1 migrated, cron scheduled every 30 min), but Access is not enabled (every route currently 403s from the Worker's own JWT check with no way to pass it), there is no X OAuth 2.0 client, and no Telegram chat id — so nothing runs end to end yet. See `docs/runbooks/deploy.md`.
 
 ## Next (owner steps, in order — then the agent finishes deploy)
@@ -18,7 +18,7 @@ Updated: 2026-08-30
 - `TELEGRAM_CHAT_ID` secret — need one message sent to the bot from the owner's Telegram account first.
 
 ## Done recently
-- 2026-08-30 Final review fix wave: `/v/:key` 304 on If-Modified-Since (not just If-None-Match), 416 on unsatisfiable Range; `download()` refuses unknown-length bodies instead of buffering; multi-video posts with one permanently-failed video record a partial `downloaded` row instead of hiding the stored sibling; 9 minors. `npm test` 41/41.
+- 2026-08-30 Final review fix wave + re-review fix: `/v/:key` 304 on If-Modified-Since, 416 only on an unsatisfiable Range (other R2 faults now propagate); `download()` refuses unknown-length bodies (ADR-0009); multi-video partial-`downloaded` rows now point `r2_key` at whichever video actually stored, not always `videos[0]`; 9 minors. `npm test` 43/43.
 - 2026-08-30 Task 9 (part): R2/KV/D1 created and bound, D1 migrated, Worker deployed twice (`PUBLIC_ORIGIN` set on 2nd), `TELEGRAM_BOT_TOKEN` secret set; `docs/runbooks/deploy.md` written; `docs/ARCHITECTURE.md` rewritten as built; `docs/GOTCHAS.md` pruned; `docs/runbooks/setup-x-developer-app.md` OAuth-2.0-vs-1.0a note added.
 - 2026-08-30 Task 8 review fixes: `/v/:key` 206-only-on-Range, 304 on If-None-Match, safe key decode; `test/index.test.ts` 5 tests.
 - 2026-08-30 Task 8: `src/html.ts` + `src/index.ts` — routes, Access gate, OAuth PKCE flow, scheduled handler; `test/index.test.ts` 4 tests.

@@ -62,6 +62,9 @@ export class FakeR2 {
     return { key, size: bytes.byteLength };
   }
   async get(key: string, opts: { range?: Headers; onlyIf?: Headers } = {}) {
+    // ponytail: magic key for the "generic R2 fault must propagate" test — real R2 can throw for
+    // reasons other than an unsatisfiable Range (network fault, internal error).
+    if (key === "99999.mp4") throw new Error("boom");
     const o = this.objects.get(key);
     if (!o) return null;
     const httpEtag = `"${key}"`;

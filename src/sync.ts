@@ -91,24 +91,26 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   const prev = await d.store.getBookmark(it.postId);
   if (prev && prev.status !== "pending" && prev.error && !prev.error.startsWith("http_5")) return;
   if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
-  let bytes = 0, stored = 0, fail: Dl | null = null;
+  let bytes = 0, stored = 0, fail: Dl | null = null, firstStoredKey: string | null = null;
   for (const v of it.videos) {
     const head = await d.store.r2.head(v.key);
-    if (head) { bytes += head.size; stored++; continue; }
+    if (head) { bytes += head.size; stored++; firstStoredKey ??= v.key; continue; }
     if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) continue;
     budget.downloads++;
     let r: Dl;
     try { r = await download(d, it, v); } catch { r = { ok: false, status: "pending", error: "exception" }; }
-    if (r.ok) { bytes += r.bytes; stored++; res.downloaded++; res.bytes += r.bytes; }
+    if (r.ok) { bytes += r.bytes; stored++; firstStoredKey ??= v.key; res.downloaded++; res.bytes += r.bytes; }
     else { fail = r; res.failed++; }
     const [lo, hi] = DOWNLOAD_JITTER_MS;
     await (d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(lo + (d.random ?? Math.random)() * (hi - lo));
   }
-  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes }));
+  // r2_key must point at a video actually in R2 (index/video route serve straight from it) —
+  // it.videos[0] is wrong whenever the first video is the one that permanently failed.
+  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey }));
   // Partial: at least one video of a multi-video post is stored and the rest can never succeed —
   // record it as downloaded (with the failing video's error) instead of hiding the stored sibling
   // behind a "pending"/"failed" row that never lists it.
-  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, error: fail.error }));
+  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, error: fail.error }));
   if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error }));
   return d.store.upsertBookmark(row(it, "pending", d));
 }
