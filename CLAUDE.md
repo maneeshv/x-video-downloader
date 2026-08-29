@@ -13,7 +13,7 @@ sessions. The docs are the agent's memory; keeping them true is part of every ta
   `docs/STATUS.md` says a plan is approved for execution.
 
 ## Hard rules
-1. Never commit secrets (X cookies, tokens). Secrets live in `wrangler secret` / `.dev.vars`.
+1. Never commit secrets (X client secret, OAuth tokens, Telegram token). Secrets live in `wrangler secret` / `.dev.vars`; tokens live in KV.
 2. Absolute imports only (owner preference).
 3. No new dependency without an ADR in `docs/decisions/`.
 4. Absolute dates (`YYYY-MM-DD`) everywhere. Never "yesterday", "recently", "now".
@@ -47,6 +47,6 @@ END (before saying "done"):
 | `docs/STANDARDS.md` | Code + doc conventions and templates. |
 | `docs/decisions/` | ADRs. Append-only, numbered. |
 | `docs/research/` | Dated research reports with sources (evidence behind ADRs). |
-| `docs/runbooks/` | Recurring ops tasks (deploy, refresh cookies). |
+| `docs/runbooks/` | Recurring ops tasks (setup X app, re-auth, deploy). |
 | `docs/superpowers/specs/` | Approved designs, frozen. |
 | `docs/superpowers/plans/` | Implementation plans. |

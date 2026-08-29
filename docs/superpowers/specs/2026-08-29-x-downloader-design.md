@@ -1,95 +1,93 @@
 # x-downloader — system design
-Date: 2026-08-29 | Status: **PROPOSED** (awaiting owner review; see `docs/QUESTIONS.md`)
-Evidence: `docs/research/2026-08-29-persona-*.md` (five persona reports with sources)
+Date: 2026-08-29 (revised same day after owner answers Q1=c, Q5=yes, defaults for Q2–Q8) | Status: **PROPOSED — revision awaiting owner review**
+Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0006
 
 ## 1. Summary
-A single Cloudflare Worker, triggered by cron, reads the owner's X bookmarks through the same internal GraphQL endpoint the X web app uses (authenticated with the owner's session cookies stored as Worker secrets), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser. No database. No queue.** Everything runs on free tiers; storage beyond 10 GB is the only expected cost.
+A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner's bookmarks through the **official X API v2** (OAuth 2.0 user context, pay-per-use), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser, no session cookies, no database, no queue.** Compute and storage run on free tiers; the X API costs ≈ $0.70/month (≤ $3.50 worst case); storage beyond 10 GB is the only other cost.
 
-The brainstorm converged on this from five angles (Cloudflare architect, scraping pragmatist, lazy senior dev, security reviewer, repo designer). Where personas disagreed, the resolution and reason are recorded in §7.
+## 2. Approaches considered (decided in ADR-0002)
+| # | Approach | Cost | Verdict |
+|---|---|---|---|
+| A | Session cookies + X's internal GraphQL from a Worker | $0 | Rejected by owner: stores a password-equivalent secret, violates X ToS, unverified whether X tolerates Cloudflare egress IPs |
+| **B** | **Official X API v2, pay-per-use** | ~$0.70–3.50/mo | **Chosen.** ToS-compliant, documented, stable; needs an X developer app + prepaid credits |
+| C | Headless browser login (Browser Run) | ≥ $5/mo | Rejected: login challenges, bot flags, ends with the same cookies as A |
+| D | Browser extension → webhook | $0 | Rejected: not fully cloud |
+| E | Poller at home, Worker stores | $0 | Rejected: not fully cloud |
 
-## 2. Approaches considered
-| # | Approach | Cost | Reliability | Verdict |
-|---|---|---|---|---|
-| A | **Cookie + internal GraphQL from a Worker** (recommended) | $0 | Good; breaks on queryId rotation (self-heals, see §5) and cookie death (runbook) | **Recommended** — pending spike S1 (does X accept Cloudflare egress IPs?) |
-| B | Official X API v2, pay-per-use ($0.001/bookmark read, deduped daily) | ~$1–3/mo | Best; ToS-compliant; 800-item cap | **Fallback** if S1 fails or the owner prefers ToS compliance. Needs an OAuth app + card on file. Same Worker, different fetch module. |
-| C | Headless browser (Browser Run) logging into X | Free 10 min/day is too little at 30-min polling; Paid ≈ $6/mo | Worst: login blocks, 2FA/email challenges, bot flags; ends with the same cookies as A | Rejected |
-| D | Browser extension → Worker webhook | $0 | Zero ban risk, but only works while the owner's browser is open | Rejected (violates "fully cloud") |
-| E | Run the poller at home, Worker only stores | $0 | Residential IP removes the biggest unknown | Rejected (violates "fully cloud"); documented as escape hatch |
-
-## 3. Architecture (approach A)
+## 3. Architecture
 ```
-                    cron (*/30)                     Cloudflare Access (email OTP)
-                        │                                    │
-                        ▼                                    ▼
-   ┌──────────────────────────────────────────────────────────────────┐
-   │  Worker  (src/index.ts)                                          │
-   │  scheduled()  ── sync():                                          │
-   │     1. GET x.com/i/api/graphql/<id>/Bookmarks (1 page, count 20)  │
-   │     2. extract {tweetId, bestMp4Url, meta} for video entries      │
-   │     3. for each: if !R2.head(key) → fetch(mp4) → R2.put(key, body)│
-   │     4. write run summary to KV (last_run, last_error, counts)     │
-   │  fetch():                                                         │
-   │     GET /            → HTML list of videos (R2.list + metadata)   │
-   │     GET /v/:id       → stream from R2, honours Range              │
-   │     GET /status      → JSON from KV                               │
-   │     GET /backfill?k= → paginate all bookmarks once (manual)       │
-   └───────┬───────────────────────┬──────────────────────┬────────────┘
-           │                       │                      │
-     Secrets:                 R2 bucket               KV namespace
-     X_AUTH_TOKEN             key = <tweetId>.mp4     run status,
-     X_CT0                    customMetadata:         paused_until,
-     (TELEGRAM_* optional)    author, text, url,      queryId cache,
-                              bookmarkedAt            failed-id skip set
+   cron */30 ──────────────┐            Cloudflare Access (email OTP) ── owner's browser
+                           ▼                                   │
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │ Worker (src/index.ts)                                                    │
+   │ scheduled() → sync():                                                    │
+   │   0. if KV.paused_until > now → skip                                     │
+   │   1. token = ensureAccessToken()   (refresh if < 5 min left; rotate safely)│
+   │   2. GET api.x.com/2/users/{id}/bookmarks?max_results=20&expansions=…     │
+   │   3. extract {postId, bestMp4Url, meta} for entries with video media      │
+   │   4. for each (≤5/run): if !R2.head(key) → fetch(mp4) → R2.put(key, body) │
+   │   5. KV.status = {lastRun, lastError, counts, bytes}                     │
+   │ fetch():                                                                 │
+   │   GET /                → HTML index (R2.list + customMetadata)           │
+   │   GET /v/:id           → stream from R2, honours Range                   │
+   │   GET /status          → JSON from KV                                    │
+   │   GET /oauth/start     → redirect to x.com authorize (PKCE, state in KV) │
+   │   GET /oauth/callback  → exchange code, store tokens + user id in KV     │
+   │   GET /backfill        → paginate all bookmarks once (≤800), same path    │
+   └────────┬──────────────────────────┬──────────────────────┬───────────────┘
+            │                          │                      │
+      Secrets                     R2 bucket               KV namespace
+      X_CLIENT_ID                 key <postId>.mp4        oauth {access, refresh,
+      X_CLIENT_SECRET             customMetadata:           prevRefresh, expiresAt}
+      TELEGRAM_BOT_TOKEN (opt)      text, postUrl,         userId, status,
+      TELEGRAM_CHAT_ID  (opt)       createdAt, bitrate,    paused_until,
+                                    previewUrl            pkce:<state>, failed:<id>
 ```
-External calls: `x.com/i/api/graphql/*/Bookmarks` (authenticated), `video.twimg.com/*.mp4` (anonymous, verified 2026-08-29), optionally `abs.twimg.com/…/main.*.js` for queryId re-discovery and `api.telegram.org` for alerts.
+External calls: `api.x.com/2/*` (OAuth bearer), `x.com/i/oauth2/authorize` (browser redirect), `video.twimg.com/*.mp4` (anonymous; `Accept-Ranges` + `Content-Length` verified), `api.telegram.org` (optional alerts).
 
 ## 4. Components
-**Worker (TypeScript, wrangler, no framework).** Files: `src/index.ts` (handlers + routing), `src/x.ts` (headers, GraphQL call, response parser), `src/store.ts` (R2/KV helpers), `src/limits.ts` (all hard-coded caps and magic strings with provenance comments). Target ≤400 lines total.
+**Worker** — TypeScript, wrangler, no framework (ADR-0006). Files: `src/index.ts` (handlers, routing, HTML), `src/x.ts` (OAuth + bookmarks call + parser), `src/store.ts` (R2/KV helpers), `src/limits.ts` (caps + magic strings with provenance comments). Target ≤ 450 lines.
 
-**Cron trigger** `*/30 * * * *` (default; see Q4). One page of 20 bookmarks per run; process every item on the page (do not stop at the first already-seen id — a failed item in the middle would otherwise never retry).
+**Cron** `*/30 * * * *`. One request of `max_results=20` per run; process every returned item (never stop at the first already-seen id — a mid-page failure would never retry).
 
-**R2 bucket = storage and ledger.** Object key `<tweetId>.mp4` (multi-video tweets: `<tweetId>-<n>.mp4`). "Processed?" = `head(key)`. `put` is atomic, so a crash mid-upload leaves nothing and the next run retries. Metadata (author handle, text, tweet URL, bookmark time, bitrate) in `customMetadata`. No public bucket; no r2.dev; no custom domain on the bucket.
+**R2 = storage + ledger** (ADR-0003). Key `<postId>.mp4`, multi-video `<postId>-<n>.mp4`. Processed ⇔ `head(key)` exists. `put` is atomic. Metadata in `customMetadata`. Never public (ADR-0004).
 
-**KV namespace = small mutable state.** `status` (last run time, last error, counts), `paused_until` (set on 401/403/429; sync skips while set), `queryId` (cached discovery), `failed:<id>` (permanent failures such as tombstones, to skip). Writes ≤ ~50/day, well under the 1,000/day free cap.
+**KV = small mutable state.** `oauth` (access token, refresh token, previous refresh token, expiry), `userId`, `status`, `paused_until`, `pkce:<state>` (10-minute TTL during consent), `failed:<id>` (permanent skips: no variants, tombstoned, >200 MB). Writes ≈ 50–100/day, under the 1,000/day free cap.
 
-**Secrets.** `X_AUTH_TOKEN`, `X_CT0` via `wrangler secret put`; locally in `.dev.vars`. Optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `BACKFILL_KEY`.
+**Secrets** via `wrangler secret put`: `X_CLIENT_ID`, `X_CLIENT_SECRET`, optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Locally `.dev.vars` (gitignored). `wrangler.toml.example` committed; real `wrangler.toml` gitignored.
 
-**Access.** Cloudflare Access one-click on the Worker (free, email one-time-PIN). The Worker also verifies `cf-access-jwt-assertion` so a route misconfiguration cannot expose videos. `/status` may be exempted for uptime checks (Q3).
+**Access.** Cloudflare Access one-click on the Worker; every route including `/oauth/*` and `/backfill` sits behind it (the OAuth callback is a browser redirect carrying the owner's Access cookie). The Worker additionally validates `cf-access-jwt-assertion` (team domain + AUD from vars) so a misconfigured policy cannot expose videos or trigger backfills.
 
-## 5. Behaviour details
-- **Headers** exactly as the web client: `Cookie: auth_token=…; ct0=…`, `x-csrf-token`, public bearer, `x-twitter-auth-type: OAuth2Session`, `x-twitter-active-user: yes`, browser User-Agent. Sequential requests, 1–3 s jitter between mp4 downloads, never parallel.
-- **Video selection**: max `bitrate` among `video/mp4` variants; GIFs (`animated_gif`) included; quoted-tweet video taken from `quoted_status_result`; m3u8 ignored.
-- **Streaming**: `fetch(mp4)` → `R2.put(key, response.body, {httpMetadata, customMetadata})`. Requires `Content-Length` (verified present on video.twimg.com; if absent, buffer if < 100 MB else skip and record). Skip files > 200 MB (constant).
-- **Self-healing on API drift**: 404 on the GraphQL op → re-discover `queryId` (fa0311 GraphQL.md raw file, fallback main.js regex), cache in KV, retry once. 400 "features cannot be null: a, b" → add the named features as `true`, retry once. 200 with zero parsable entries on a non-empty account → treat as error and alert (this is the real drift detector).
-- **Circuit breaker**: on 401 / error 32 (dead cookie) or 403 / error 326 (account lock) or 429 → set `paused_until` (24 h; 429 uses `x-rate-limit-reset`), record error, alert once, skip runs until cleared. Hard caps: `MAX_API_REQUESTS_PER_RUN = 3`, `MAX_DOWNLOADS_PER_RUN = 5`, `MAX_FILE_BYTES = 200 MB`, `MAX_TOTAL_BYTES` (owner-set, Q6).
-- **Alerting**: one Telegram message per distinct failure (bot API = one `fetch`), suppressed until the failure clears. If the owner declines Telegram (Q3), `/status` and the index page show the error; nothing else.
-- **Backfill**: `GET /backfill?k=<BACKFILL_KEY>` paginates all bookmarks once with the same per-item code path; resumable by construction (ledger). Wall-clock limit 15 min; re-invoke to continue. Default: run once after first deploy (Q4b).
-- **Consumption**: `GET /` lists newest first with `<video controls preload="none" poster=<X thumbnail>>`; `GET /v/:id` streams with Range support. Bulk: `rclone sync` against R2's S3 API (runbook).
+## 5. Behaviour
+- **OAuth.** `/oauth/start`: generate `code_verifier`/S256 challenge + random `state`, store in KV, redirect to `https://x.com/i/oauth2/authorize` with `scope=bookmark.read tweet.read users.read offline.access`. `/oauth/callback`: verify state, POST `https://api.x.com/2/oauth2/token` with `Authorization: Basic base64(client_id:client_secret)` + `code_verifier`; store tokens; call `GET /2/users/me` once and cache `userId`; clear `paused_until`.
+- **Token refresh (rotation-safe).** If `expiresAt − now < 5 min`: POST refresh → **write the new token pair to KV first**, keeping the old refresh token as `prevRefresh`. If refresh fails with the current token, try `prevRefresh` once. If both fail → set `status.auth = needs_reauth`, pause, alert once with the `/oauth/start` link. (Refresh tokens are single-use and invalidated server-side immediately — `docs/research/2026-08-29-x-api-v2.md`.)
+- **Bookmarks request.** `expansions=attachments.media_keys&media.fields=media_key,type,variants,preview_image_url,duration_ms&tweet.fields=created_at,text,attachments`. No `author_id`/`user.fields` (may bill as $0.01 user reads; post URL is `https://x.com/i/status/<id>`, which needs no handle).
+- **Video selection.** From `includes.media`, `type ∈ {video, animated_gif}`, choose max `bit_rate` among `content_type == video/mp4`. No variants → `failed:<id>` + log. Quoted-post video is out of v1 scope (needs an extra $0.005 lookup); recorded as a follow-up.
+- **Download.** `fetch(mp4)` → `R2.put(key, response.body, {httpMetadata: {contentType}, customMetadata})`. Requires `Content-Length` (verified exposed); if absent and `< 100 MB`, buffer; else skip + `failed:<id>`. Skip > 200 MB. Sequential, 1–2 s jitter, max 5 downloads/run; the rest wait for the next run.
+- **Circuit breaker (ADR-0005).** 401 → attempt refresh once, else `needs_reauth` + pause 24 h. 403/429 → pause until `x-rate-limit-reset` (429) or 24 h (403), alert once. Hard caps in `src/limits.ts`: `MAX_API_REQUESTS_PER_RUN=3`, `MAX_DOWNLOADS_PER_RUN=5`, `MAX_FILE_BYTES=200 MB`, `STORAGE_ALERT_BYTES=9 GB` (alert, keep downloading — owner default Q6). `200 OK` with `data` present but zero media for 30 consecutive runs while `meta.result_count > 0` → alert "parser may be stale".
+- **Alerting.** Telegram Bot API, one `fetch`, one message per distinct condition, suppressed until cleared. Without Telegram secrets, `/status` and the index page are the only signal.
+- **Backfill.** `GET /backfill` (behind Access) paginates with `max_results=90` (pagination bug at 100) until no `next_token` or 800 items; same per-item path; resumable by construction; 15-minute wall limit → re-invoke. Runs once after first deploy (owner default Q4b).
+- **Consumption (Q2 = both).** `GET /` lists newest first: `<video controls preload="none" poster=previewUrl src="/v/<id>">`, text, post link, size, download link. `GET /v/:id` streams with `Range` support. Bulk: `rclone sync` against R2's S3 API with a scoped read-only token (runbook to be written at deploy time).
 
-## 6. Security & hygiene (from the security review)
-Cookies are password-equivalent; anyone who can deploy the Worker can read them. Mitigations: 2FA on X and Cloudflare; API tokens scoped to Workers Scripts Edit + R2 Object Read/Write; optional dedicated X account (Q1); rotate on suspicion (password change kills all sessions). Repo: `.dev.vars`, `.env*`, `.wrangler/`, real `wrangler.toml` gitignored; `wrangler.toml.example` committed; one helper builds auth headers; tests assert logs never contain the token; gitleaks rule for `auth_token=[0-9a-f]{40}`. R2 bucket lock (indefinite retention) so agent-written code cannot delete the archive. Cloudflare budget alert + in-code storage cap.
+## 6. Cost
+| Item | Monthly |
+|---|---|
+| Workers, KV, R2 ops, Access, cron | $0 (free tiers) |
+| X API reads (≈23 deduped posts/day) | ≈ $0.70 at Owned-Reads rate; ≤ $3.50 at standard rate; spending limit $10/cycle |
+| R2 storage over 10 GB | $0.015/GB-month |
+| Workers Paid (only if streaming trips the Free 10 ms CPU cap — owner approved) | $5 |
 
-## 7. Disagreements resolved
-| Topic | Personas | Resolution |
-|---|---|---|
-| D1 + Workflows (CF architect) vs R2-as-ledger + next-cron-as-retry (lazy dev) | — | **R2-as-ledger.** One user, ≤20 items/run, atomic put. Workflows/Queues/D1 stay NEVER until a concrete failure demands them. KV added only for status/pause/skip-set, which R2 cannot express cheaply. |
-| Cadence hourly (lazy) vs 15–30 min (scraper) | — | **30 min default**, owner may pick (Q4). 48 GraphQL calls/day is invisible against a ~500/15 min limit. |
-| Telegram alert: defer (lazy) vs include (scraper, security) | — | **Include, optional.** Fully-cloud means nobody is looking at a page; one `fetch` is cheaper than a missed month of outages. |
-| Stop at first seen id (scraper) vs process whole page | — | **Whole page**, else a mid-page failure is never retried. |
-| Public R2 domain (CF architect) vs Access-gated Worker route (security) | — | **Access-gated Worker route.** Unguessable URLs are not auth, and re-hosting publicly is the one legally uncomfortable thing. |
+## 7. Security & hygiene
+Client secret and tokens are far lower-value than session cookies (revocable at x.com/settings/connected_apps; scoped read-only) — ADR-0002. Still: never log tokens (one helper builds auth headers; test asserts no leak); scoped Cloudflare API tokens; R2 bucket lock; Cloudflare budget alert; `.dev.vars`/`wrangler.toml` gitignored; gitleaks pre-commit.
 
-## 8. Cost
-$0/month on Workers Free, R2 Free (10 GB), KV Free, Access Free. Storage over 10 GB: $0.015/GB-month (e.g., 100 videos/month × 30 MB ≈ $0.40/month by month 12). **If** streaming a large mp4 exceeds the Free plan's 10 ms CPU cap (spike S2), Workers Paid at $5/month is the fix (Q5).
+## 8. Testing (ADR-0006)
+`node --test`, stdlib only. Fixtures: one scrubbed real bookmarks response (video, animated_gif, photo-only, multi-video, no-variants). Tests: `parseBookmarks(fixture)` → expected list; `selectVariant` edge cases; `buildAuthHeader` never leaks into serialized logs; refresh-rotation state machine (success, first fails/prev succeeds, both fail → needs_reauth); circuit-breaker transitions on 401/403/429. Manual acceptance: deploy → `/oauth/start` → bookmark one video → within 30 min it appears at `/`.
 
-## 9. Spikes before implementation (throwaway code, answers only)
-- **S1 — Egress acceptance.** Throwaway Worker: one Bookmarks GraphQL call with the owner's cookies from Workers; record status, rate-limit headers, whether `x-client-transaction-id` is required, and whether X shows a "verify it's you" prompt afterwards. Failure → switch to approach B.
-- **S2 — Streaming under Free CPU cap.** Throwaway Worker: stream a ~100–300 MB mp4 from video.twimg.com into R2; check for Error 1102 and confirm `Content-Length`. Failure → Workers Paid or buffer-and-chunk.
+## 9. Open items / follow-ups (not blocking)
+- Owned-Reads rate may not yet apply to bookmarks — confirm from the first console usage report.
+- `animated_gif` variants shape unverified — parser must tolerate absence.
+- Quoted-post video support — later, if the owner misses it.
+- Free-plan CPU cap on large streams — if Error 1102 appears, move to Workers Paid (approved).
 
-## 10. Testing
-`node --test`, stdlib only. (1) `parseBookmarks(fixture)` on a scrubbed real response → expected `{id, mp4Url, meta}` list; (2) `selectVariant` cases: mp4 vs m3u8, GIF bitrate 0, multi-video, quoted video; (3) `buildHeaders` never leaks the token into any logged object; (4) circuit-breaker state transitions on 401/403/429. Manual: deploy, bookmark one video, wait ≤30 min, confirm it appears at `/`.
-
-## 11. Out of scope for v1
-D1, Queues, Workflows, Durable Objects, thumbnails, transcoding, search, multi-user, dashboard SPA, automatic login, images/text archiving. Each has a trigger condition in `docs/research/2026-08-29-persona-lazy-skeptic.md`.
-
-## 12. Decisions that become ADRs on approval
-0002 no headless browser — cookie + internal GraphQL · 0003 R2 object key is the ledger (no DB/queue) · 0004 Access-gated Worker route, no public bucket · 0005 hard caps and circuit breaker as code constants · 0006 TypeScript + wrangler, no framework, `node --test`.
+## 10. Out of scope for v1
+D1, Queues, Workflows, Durable Objects, thumbnails generation, transcoding, search, multi-user, SPA dashboard, images/text archiving, quoted-post video.

@@ -2,11 +2,4 @@
 
 Owner-facing. Each line: an OPEN marker, the date asked, options, the default the agent will assume if unanswered, and what it blocks. Resolved → ADR or journal line, then delete here.
 
-- [ ] OPEN 2026-08-29 Q1: Which X account supplies the session cookies? Options: (a) your main account — simplest, but the stored cookie is password-equivalent and the account carries the lock/suspension risk; (b) a dedicated bookmark-only account — you'd have to bookmark from it; (c) skip cookies entirely and use the official pay-per-use API (~$1–3/month, ToS-compliant, needs an X developer app + card). Default: (a), with 2FA on. Blocks: spike S1, ADR-0002.
-- [ ] OPEN 2026-08-29 Q2: How do you want to consume the videos? Options: (a) private web page (email-OTP login via Cloudflare Access) with an in-browser player + download links; (b) only sync to your laptop with `rclone`; (c) both. Default: (c) — (a) is ~40 lines and (b) is zero code. Blocks: spec §5 consumption.
-- [ ] OPEN 2026-08-29 Q3: Failure alerts? Options: (a) Telegram bot message (free, ~10 lines, one-time bot setup); (b) none — check `/status` yourself; (c) other (email/Discord/Slack webhook). Default: (a). Blocks: spec §5 alerting.
-- [ ] OPEN 2026-08-29 Q4: Polling interval and backfill. (4a) Every 30 min (default) vs hourly vs 15 min. (4b) On first deploy, backfill all existing bookmarked videos (default: yes, one manual run) or only new bookmarks from now on? Blocks: cron config, backfill route.
-- [ ] OPEN 2026-08-29 Q5: If streaming a large video exceeds the Free plan's 10 ms CPU cap (spike S2), are you OK with Workers Paid at $5/month? Default: yes. Blocks: spike S2 follow-up.
-- [ ] OPEN 2026-08-29 Q6: Storage policy. Options: (a) keep everything forever, pay ~$0.015/GB-month over 10 GB (≈$0.40/mo after a year at 100 videos/mo); (b) hard cap (e.g., 10 GB) and stop downloading with an alert; (c) cap and auto-delete oldest. Default: (a) with an alert at 9 GB. Blocks: `MAX_TOTAL_BYTES` constant.
-- [ ] OPEN 2026-08-29 Q7: Do you have a domain on Cloudflare you want to use (e.g., `x.yourdomain.com`), or is `<name>.workers.dev` fine? Default: workers.dev. Blocks: nothing until deploy.
-- [ ] OPEN 2026-08-29 Q8: Should a `Stop` hook in `.claude/settings.json` run `scripts/check-session.sh` automatically (blocks the agent from finishing a session without updating JOURNAL/STATUS)? Default: not wired; the protocol in CLAUDE.md is the only enforcement. Blocks: nothing.
+(none — all 2026-08-29 questions resolved; see JOURNAL entry 2026-08-29 and ADRs 0002–0006)
