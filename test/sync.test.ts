@@ -131,6 +131,35 @@ test("video too large → failed/too_large, nothing stored; 5xx → pending/http
   assert.deepEqual([(await w.store.getBookmark("1000000000000000001"))!.status, (await w.store.getBookmark("1000000000000000001"))!.error], ["failed", "too_large"]);
 });
 
+test("video response with no content-length → failed/no_length, nothing stored, body never read", async () => {
+  const b = fx(); b.data = b.data.slice(0, 1); b.meta.result_count = 1;
+  const w = world(routes(b, () => ({ status: 200, bodyBytes: new Uint8Array(3), headers: { "content-type": "video/mp4" } })));
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 0); assert.equal(r.failed, 1);
+  assert.equal(w.r2.objects.size, 0, "no_length is refused before anything is stored");
+  const row = await w.store.getBookmark("1000000000000000001");
+  assert.deepEqual([row!.status, row!.error], ["failed", "no_length"]);
+});
+
+test("multi-video post with one permanently failed video: the stored sibling is not hidden (partial)", async () => {
+  const b = fx(); b.data = b.data.slice(3, 4); b.meta.result_count = 1;
+  const w = world(routes(b, (url) => (url.includes("4b.mp4") ? { status: 404, body: {} } : mp4())));
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
+  const row = await w.store.getBookmark("1000000000000000004");
+  assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-1.mp4"]);
+  assert.deepEqual([...w.r2.objects.keys()], ["1000000000000000004-1.mp4"]);
+  assert.ok((await w.store.listDownloaded()).some((x) => x.post_id === "1000000000000000004"), "listDownloaded includes the partial row");
+
+  const videoCalls = () => w.f.calls.filter(([u]) => u.includes("4a.mp4") || u.includes("4b.mp4")).length;
+  const before = videoCalls();
+  const r2 = await sync(w.d);
+  assert.equal(r2.downloaded, 0); assert.equal(r2.failed, 0);
+  assert.equal(videoCalls(), before, "neither video is refetched on rerun");
+});
+
 test("non-XApiError throw during download does not abort the run", async () => {
   const b = fx(); b.data = b.data.slice(0, 2); b.meta.result_count = 2;
   const w = world(routes(b, (url) => {

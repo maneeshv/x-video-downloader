@@ -1,9 +1,8 @@
 // Hard caps (ADR-0005). Compile-time constants on purpose: raising one is a code change + journal line.
 export const VERSION = "v1";
-export const MAX_API_REQUESTS_PER_RUN = 3;          // cron run: 1 bookmarks page + ≤2 auth calls
+export const MAX_API_REQUESTS_PER_RUN = 3;          // documents the structural bound of one run (1 bookmarks page + ≤2 token calls + ≤2 forced-refresh calls on 401); asserted by tests, not enforced at runtime.
 export const MAX_DOWNLOADS_PER_RUN = 5;             // rest wait for the next tick (ADR-0008)
 export const MAX_FILE_BYTES = 200 * 1024 * 1024;    // spec §5
-export const BUFFER_IF_NO_LENGTH_BYTES = 100 * 1024 * 1024; // R2.put needs a known length for streams
 export const STORAGE_ALERT_BYTES = 9 * 1024 ** 3;   // alert, keep downloading (owner default Q6)
 export const PAUSE_MS_AUTH = 24 * 3600_000;         // 401/403 → pause 24 h
 export const REFRESH_AHEAD_MS = 5 * 60_000;         // refresh when < 5 min left (access token lives 2 h)

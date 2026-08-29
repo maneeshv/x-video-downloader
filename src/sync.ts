@@ -1,5 +1,5 @@
 import {
-  BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, BUFFER_IF_NO_LENGTH_BYTES, DOWNLOAD_JITTER_MS,
+  BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS,
   MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES,
 } from "#src/limits";
 import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
@@ -18,10 +18,13 @@ export async function alert(d: Deps, key: string, text: string): Promise<void> {
   if (d.cfg.telegram) {
     const { token, chatId } = d.cfg.telegram;
     // https://core.telegram.org/bots/api#sendmessage — send before marking, so a failed send is retried next time.
-    const ok = await d.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: `x-downloader: ${text}` }),
-    }).then((r) => r.ok).catch(() => false);
+    let ok = false;
+    try {
+      ok = await d.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: `x-downloader: ${text}` }),
+      }).then((r) => r.ok);
+    } catch { ok = false; }
     if (!ok) return;
   }
   await d.store.patchStatus({ alerts: { ...s.alerts, [key]: iso(now(d)) } });
@@ -43,7 +46,6 @@ export async function ensureAccessToken(d: Deps, force = false): Promise<string 
     if (!r) continue;
     try {
       const nt = await refreshTokens(d.fetch, d.cfg, r, now(d));
-      if (r === t.prevRefresh) nt.prevRefresh = t.prevRefresh;
       await d.store.putTokens(nt);
       return nt.access;
     } catch (e) {
@@ -73,38 +75,40 @@ async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
   const res = await d.fetch(v.url);
   if (!res.ok || !res.body) return { ok: false, status: res.status >= 500 ? "pending" : "failed", error: `http_${res.status}` };
   const len = Number(res.headers.get("content-length")) || 0;
+  // R2.put needs a known length for streams; an unknown/zero length is refused outright rather
+  // than buffered, so a video response can never be read fully into memory before the size check.
+  if (!len) return { ok: false, status: "failed", error: "no_length" };
   if (len > MAX_FILE_BYTES) return { ok: false, status: "failed", error: "too_large" };
-  let body: ReadableStream | ArrayBuffer = res.body, bytes = len;
-  if (!len) {
-    // R2.put needs a known length for streams; buffer small unknown-length bodies, refuse big ones.
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > BUFFER_IF_NO_LENGTH_BYTES) return { ok: false, status: "failed", error: "no_length" };
-    body = buf; bytes = buf.byteLength;
-  }
-  await d.store.putVideo(v.key, body, { postId: it.postId, text: it.text, postUrl: it.postUrl, postedAt: it.postedAt, previewUrl: it.previewUrl, bitRate: v.bitRate });
-  return { ok: true, bytes };
+  await d.store.putVideo(v.key, res.body, { postId: it.postId, text: it.text, postUrl: it.postUrl, postedAt: it.postedAt, previewUrl: it.previewUrl, bitRate: v.bitRate });
+  return { ok: true, bytes: len };
 }
 
 async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number }): Promise<void> {
   if (!it.hasVideoMedia) return d.store.upsertBookmark(row(it, "no_video", d));
-  if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
-  // Spec §5: failed rows are not retried unless the error is transient (http_5xx).
+  // A row with a permanent error — outright "failed", or "downloaded" partial (one video of a
+  // multi-video post permanently failed) — is not retried unless the error is transient
+  // (http_5xx); "pending" rows (budget-deferred or transient failures) always retry.
   const prev = await d.store.getBookmark(it.postId);
-  if (prev?.status === "failed" && !prev.error?.startsWith("http_5")) return;
-  let bytes = 0, complete = true, fail: Dl | null = null;
+  if (prev && prev.status !== "pending" && prev.error && !prev.error.startsWith("http_5")) return;
+  if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
+  let bytes = 0, stored = 0, fail: Dl | null = null;
   for (const v of it.videos) {
     const head = await d.store.r2.head(v.key);
-    if (head) { bytes += head.size; continue; }
-    if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) { complete = false; continue; }
+    if (head) { bytes += head.size; stored++; continue; }
+    if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) continue;
     budget.downloads++;
     let r: Dl;
     try { r = await download(d, it, v); } catch { r = { ok: false, status: "pending", error: "exception" }; }
-    if (r.ok) { bytes += r.bytes; res.downloaded++; res.bytes += r.bytes; }
-    else { complete = false; fail = r; res.failed++; }
+    if (r.ok) { bytes += r.bytes; stored++; res.downloaded++; res.bytes += r.bytes; }
+    else { fail = r; res.failed++; }
     const [lo, hi] = DOWNLOAD_JITTER_MS;
     await (d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(lo + (d.random ?? Math.random)() * (hi - lo));
   }
-  if (complete) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes }));
+  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes }));
+  // Partial: at least one video of a multi-video post is stored and the rest can never succeed —
+  // record it as downloaded (with the failing video's error) instead of hiding the stored sibling
+  // behind a "pending"/"failed" row that never lists it.
+  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, error: fail.error }));
   if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error }));
   return d.store.upsertBookmark(row(it, "pending", d));
 }
@@ -158,6 +162,8 @@ export async function sync(d: Deps, o: { backfill?: boolean } = {}): Promise<Syn
   } catch (e) {
     if (e instanceof XApiError) return breaker(d, e, res);
     await d.store.patchStatus({ lastRun: iso(now(d)), lastError: String(e) });
+    // no tokens can be in `e` from our code paths (all XApiErrors are handled above).
+    console.error("sync failed", String(e));
     throw e;
   }
 

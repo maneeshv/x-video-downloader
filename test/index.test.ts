@@ -89,6 +89,21 @@ test("/v/:key revalidation: If-None-Match hit → 304 with no body", async () =>
   assert.equal(res.headers.get("etag"), '"12345.mp4"');
 });
 
+test("/v/:key revalidation: If-Modified-Since not-modified → 304 with no body", async () => {
+  const a = await app();
+  await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
+  const res = await a.get("/v/12345.mp4", { "if-modified-since": "Sat, 01 Aug 2026 00:00:00 GMT" });
+  assert.equal(res.status, 304);
+  assert.equal((await res.arrayBuffer()).byteLength, 0);
+});
+
+test("/v/:key: an unsatisfiable Range 416s", async () => {
+  const a = await app();
+  await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
+  const res = await a.get("/v/12345.mp4", { range: "bytes=9999-" });
+  assert.equal(res.status, 416);
+});
+
 test("html escapes text", async () => {
   const { renderIndex } = await import("#src/html");
   const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "" }], {});

@@ -50,14 +50,15 @@ export class FakeKV {
 }
 
 export class FakeR2 {
-  objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string>; contentType: string }>();
+  objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string>; contentType: string; uploaded: Date }>();
   async head(key: string) {
     const o = this.objects.get(key);
     return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata } : null;
   }
   async put(key: string, body: ReadableStream | ArrayBuffer | Uint8Array | string, opts: any = {}) {
     const bytes = new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
-    this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "" });
+    // ponytail: a fixed fake upload time (not real put-time) is all If-Modified-Since needs to test against.
+    this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "", uploaded: new Date("2026-08-01T00:00:00Z") });
     return { key, size: bytes.byteLength };
   }
   async get(key: string, opts: { range?: Headers; onlyIf?: Headers } = {}) {
@@ -67,6 +68,8 @@ export class FakeR2 {
     const m = /bytes=(\d+)-(\d*)/.exec(opts.range?.get("range") ?? "");
     const start = m ? Number(m[1]) : 0,
       end = m && m[2] ? Number(m[2]) + 1 : o.bytes.byteLength;
+    // real R2 throws on an unsatisfiable range (start at/past the object's size).
+    if (m && start >= o.bytes.byteLength) throw new RangeError("Requested Range Not Satisfiable");
     const base = {
       key,
       size: o.bytes.byteLength,
@@ -77,8 +80,11 @@ export class FakeR2 {
         h.set("content-type", o.contentType);
       },
     };
-    // real R2 drops the body when an onlyIf conditional matches (e.g. If-None-Match hit).
-    if (opts.onlyIf?.get("if-none-match") === httpEtag) return base;
+    // real R2 drops the body when an onlyIf conditional matches: If-None-Match hit, or
+    // If-Modified-Since at/after the object's (fake) upload time.
+    const ims = opts.onlyIf?.get("if-modified-since");
+    const notModifiedSince = ims && !isNaN(Date.parse(ims)) && new Date(ims) >= o.uploaded;
+    if (opts.onlyIf?.get("if-none-match") === httpEtag || notModifiedSince) return base;
     return { ...base, body: new Response(o.bytes.slice(start, end)).body };
   }
   asR2(): R2Bucket {

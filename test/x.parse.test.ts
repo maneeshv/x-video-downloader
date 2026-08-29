@@ -1,22 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { parseBookmarks, selectVariant, type BookmarksResponse } from "#src/x";
+import { fixture } from "./fakes.ts";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const fixture = JSON.parse(readFileSync(join(__dirname, "fixtures/bookmarks.json"), "utf8")) as BookmarksResponse;
+const bm = fixture("bookmarks.json") as BookmarksResponse;
 
 test("selectVariant picks highest bit_rate mp4, ignores m3u8", () => {
-  const v = selectVariant(fixture.includes!.media![0].variants);
+  const v = selectVariant(bm.includes!.media![0].variants);
   assert.equal(v?.url, "https://video.twimg.com/1_high.mp4?tag=12");
   assert.equal(selectVariant(undefined), null);
   assert.equal(selectVariant([{ content_type: "application/x-mpegURL", url: "x" }]), null);
 });
 
 test("parseBookmarks classifies every returned post", () => {
-  const items = parseBookmarks(fixture);
+  const items = parseBookmarks(bm);
   assert.equal(items.length, 6, "never drops a bookmark");
   const by = Object.fromEntries(items.map((i) => [i.postId, i]));
   assert.deepEqual(by["1000000000000000001"].videos, [{ key: "1000000000000000001.mp4", url: "https://video.twimg.com/1_high.mp4?tag=12", bitRate: 2176000 }]);

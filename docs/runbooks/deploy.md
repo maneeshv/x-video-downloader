@@ -101,6 +101,10 @@ screen). `${PUBLIC_ORIGIN}/status` should then show `auth: "ok"`. Open `${PUBLIC
 once — expect JSON with `pages`, `seen`, `downloaded`. Open `${PUBLIC_ORIGIN}/` and confirm a video
 plays.
 
+If the JSON shows `seen > 0` and `downloaded == 0` (and `/status` `counts.failed` is 0), the field
+parameter may have been renamed: change `tweet.fields` to `post.fields` in `BOOKMARK_QUERY`
+(`src/limits.ts`), redeploy, re-run `/backfill`. See `docs/research/2026-08-29-x-api-v2.md`.
+
 ### 10. Verify the cron
 After ≤30 minutes, dashboard → Worker → **Cron Events** shows a successful invocation, and
 `${PUBLIC_ORIGIN}/status` `lastRun` has advanced. Check console.x.com → usage: a handful of reads

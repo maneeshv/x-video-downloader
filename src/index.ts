@@ -37,16 +37,20 @@ function servedRange(obj: R2ObjectBody): { offset: number; length: number } {
 
 async function video(store: Store, key: string, req: Request): Promise<Response> {
   if (!VIDEO_KEY_RE.test(key)) return new Response("not found", { status: 404 });
-  const obj = await store.getVideo(key, req.headers);
+  let obj: R2ObjectBody | R2Object | null;
+  try { obj = await store.getVideo(key, req.headers); }
+  // R2 throws on an unsatisfiable Range (start ≥ size); we don't have the object's size cheaply
+  // here (that throw is exactly what prevented us from getting it), so a plain 416.
+  catch { return new Response(null, { status: 416 }); }
   if (!obj) return new Response("not found", { status: 404 });
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
   headers.set("etag", obj.httpEtag);
   headers.set("accept-ranges", "bytes");
   // R2's onlyIf drops the body when the conditional matches — that's a cache-revalidation
-  // success (304 for If-None-Match), not a precondition failure (412) — reserve 412 for
-  // other onlyIf mismatches (e.g. If-Match / uploadedBefore).
-  if (!("body" in obj)) return new Response(null, { status: req.headers.has("if-none-match") ? 304 : 412, headers });
+  // success (304 for If-None-Match or If-Modified-Since), not a precondition failure (412) —
+  // reserve 412 for other onlyIf mismatches (e.g. If-Match / If-Unmodified-Since).
+  if (!("body" in obj)) return new Response(null, { status: req.headers.has("if-none-match") || req.headers.has("if-modified-since") ? 304 : 412, headers });
   if (req.headers.has("range")) {
     const { offset, length } = servedRange(obj);
     headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${obj.size}`);
