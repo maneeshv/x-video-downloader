@@ -1,5 +1,5 @@
 # 0003. The R2 object key is the ledger; no database, queue, or workflow engine
-Date: 2026-08-29 | Status: DECIDED (owner accepted default) | Supersedes: — | Evidence: docs/research/2026-08-29-persona-lazy-skeptic.md, docs/research/2026-08-29-persona-cf-architect.md
+Date: 2026-08-29 | Status: DECIDED (owner accepted default); superseded in part by ADR-0007 on 2026-08-29 (D1 now indexes bookmarks and holds the failed set; R2 key remains the download ledger) | Supersedes: — | Evidence: docs/research/2026-08-29-persona-lazy-skeptic.md, docs/research/2026-08-29-persona-cf-architect.md
 
 ## Context
 "Never download twice" and "a crashed run must not lose or duplicate a video" are the two correctness requirements. Candidates: a D1 table plus Workflows per video (Cloudflare-architect persona), or the R2 object itself as the record (lazy-senior persona). Volume is one user, ≤20 bookmarks per run, a few new videos per day.

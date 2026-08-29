@@ -25,7 +25,8 @@ One person: the owner, using their own X account and bookmarks. The project may 
 ## Non-goals
 - Multi-user / SaaS. Design for one account.
 - Downloading images, threads, or text — videos only (GIF-as-mp4 included, since X serves them as mp4).
-- Transcoding, thumbnails generation, search, tagging, a rich dashboard.
+- Transcoding, thumbnail generation, multi-user dashboards.
+- **v1 only:** search/filter UI and tagging. The owner wants these in v2 (stated 2026-08-29), so v1 records every bookmark in D1 from day one (ADR-0007) and nothing needs backfilling later.
 - Automating the X login (username/password/2FA). The owner supplies a session; the tool never logs in.
 - Re-hosting or sharing videos publicly.
 

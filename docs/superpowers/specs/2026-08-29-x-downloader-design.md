@@ -1,9 +1,9 @@
 # x-downloader — system design
-Date: 2026-08-29 (revised same day after owner answers Q1=c, Q5=yes, defaults for Q2–Q8) | Status: **PROPOSED — revision awaiting owner review**
-Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0006
+Date: 2026-08-29 (revised twice same day: owner answers Q1=c/Q5=yes; then owner asked for a bookmark index → D1, ADR-0007) | Status: **PROPOSED — revision awaiting owner review**
+Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0007
 
 ## 1. Summary
-A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner's bookmarks through the **official X API v2** (OAuth 2.0 user context, pay-per-use), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser, no session cookies, no database, no queue.** Compute and storage run on free tiers; the X API costs ≈ $0.70/month (≤ $3.50 worst case); storage beyond 10 GB is the only other cost.
+A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner's bookmarks through the **official X API v2** (OAuth 2.0 user context, pay-per-use), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser, no session cookies, no queue.** One D1 table records every bookmark the cron sees (video or not) so the planned v2 list/search UI needs no backfill; R2 remains the source of truth for what is downloaded (ADR-0007). Compute and storage run on free tiers; the X API costs ≈ $0.70/month (≤ $3.50 worst case); storage beyond 10 GB is the only other cost.
 
 ## 2. Approaches considered (decided in ADR-0002)
 | # | Approach | Cost | Verdict |
@@ -24,35 +24,55 @@ A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner'
    │   0. if KV.paused_until > now → skip                                     │
    │   1. token = ensureAccessToken()   (refresh if < 5 min left; rotate safely)│
    │   2. GET api.x.com/2/users/{id}/bookmarks?max_results=20&expansions=…     │
-   │   3. extract {postId, bestMp4Url, meta} for entries with video media      │
-   │   4. for each (≤5/run): if !R2.head(key) → fetch(mp4) → R2.put(key, body) │
+   │   3. D1 upsert every returned bookmark (has_video, status no_video|pending)│
+   │   4. for video items (≤5/run): if !R2.head(key) → fetch(mp4) → R2.put     │
+   │      then D1 status=downloaded (or failed + error)                        │
    │   5. KV.status = {lastRun, lastError, counts, bytes}                     │
    │ fetch():                                                                 │
-   │   GET /                → HTML index (R2.list + customMetadata)           │
+   │   GET /                → HTML index (D1 SELECT, newest first)            │
    │   GET /v/:id           → stream from R2, honours Range                   │
    │   GET /status          → JSON from KV                                    │
    │   GET /oauth/start     → redirect to x.com authorize (PKCE, state in KV) │
    │   GET /oauth/callback  → exchange code, store tokens + user id in KV     │
    │   GET /backfill        → paginate all bookmarks once (≤800), same path    │
-   └────────┬──────────────────────────┬──────────────────────┬───────────────┘
-            │                          │                      │
-      Secrets                     R2 bucket               KV namespace
-      X_CLIENT_ID                 key <postId>.mp4        oauth {access, refresh,
-      X_CLIENT_SECRET             customMetadata:           prevRefresh, expiresAt}
-      TELEGRAM_BOT_TOKEN (opt)      text, postUrl,         userId, status,
-      TELEGRAM_CHAT_ID  (opt)       createdAt, bitrate,    paused_until,
-                                    previewUrl            pkce:<state>, failed:<id>
+   └──────┬──────────────────┬─────────────────────┬─────────────────┬────────┘
+          │                  │                     │                 │
+     Secrets            R2 bucket             D1 (1 table)       KV namespace
+     X_CLIENT_ID        key <postId>.mp4      bookmarks:         oauth {access, refresh,
+     X_CLIENT_SECRET    customMetadata:         post_id, text,     prevRefresh, expiresAt}
+     TELEGRAM_* (opt)     text, postUrl,        post_url,        userId, status,
+                          createdAt, bitrate,   has_video,       paused_until,
+                          previewUrl            status, r2_key…  pkce:<state>
 ```
 External calls: `api.x.com/2/*` (OAuth bearer), `x.com/i/oauth2/authorize` (browser redirect), `video.twimg.com/*.mp4` (anonymous; `Accept-Ranges` + `Content-Length` verified), `api.telegram.org` (optional alerts).
 
 ## 4. Components
-**Worker** — TypeScript, wrangler, no framework (ADR-0006). Files: `src/index.ts` (handlers, routing, HTML), `src/x.ts` (OAuth + bookmarks call + parser), `src/store.ts` (R2/KV helpers), `src/limits.ts` (caps + magic strings with provenance comments). Target ≤ 450 lines.
+**Worker** — TypeScript, wrangler, no framework (ADR-0006). Files: `src/index.ts` (handlers, routing, HTML), `src/x.ts` (OAuth + bookmarks call + parser), `src/store.ts` (R2/KV/D1 helpers), `src/limits.ts` (caps + magic strings with provenance comments), `migrations/0001_bookmarks.sql`. Target ≤ 500 lines.
 
 **Cron** `*/30 * * * *`. One request of `max_results=20` per run; process every returned item (never stop at the first already-seen id — a mid-page failure would never retry).
 
-**R2 = storage + ledger** (ADR-0003). Key `<postId>.mp4`, multi-video `<postId>-<n>.mp4`. Processed ⇔ `head(key)` exists. `put` is atomic. Metadata in `customMetadata`. Never public (ADR-0004).
+**R2 = storage + download ledger** (ADR-0003). Key `<postId>.mp4`, multi-video `<postId>-<n>.mp4`. Downloaded ⇔ `head(key)` exists. `put` is atomic. Metadata also in `customMetadata` (lets D1 be rebuilt from R2 if ever needed). Never public (ADR-0004).
 
-**KV = small mutable state.** `oauth` (access token, refresh token, previous refresh token, expiry), `userId`, `status`, `paused_until`, `pkce:<state>` (10-minute TTL during consent), `failed:<id>` (permanent skips: no variants, tombstoned, >200 MB). Writes ≈ 50–100/day, under the 1,000/day free cap.
+**D1 = bookmark index** (ADR-0007). One table, raw SQL via the binding, no ORM:
+```sql
+CREATE TABLE bookmarks (
+  post_id       TEXT PRIMARY KEY,
+  first_seen_at TEXT NOT NULL,           -- when the cron first returned it (X API exposes no bookmark timestamp)
+  posted_at     TEXT,                    -- tweet created_at
+  text          TEXT,
+  post_url      TEXT NOT NULL,
+  has_video     INTEGER NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL,           -- no_video | pending | downloaded | failed
+  error         TEXT,                    -- no_variants | tombstoned | too_large | no_length | http_<code>
+  r2_key        TEXT,
+  bytes         INTEGER,
+  preview_url   TEXT,
+  updated_at    TEXT NOT NULL
+);
+```
+Every run upserts each returned bookmark (`INSERT … ON CONFLICT(post_id) DO UPDATE`), never downgrading `downloaded`, and sets `status` from `R2.head` — so a crash between `put` and the row write heals on the next run. Free tier: 5M row reads/day, 100k writes/day, 5 GB; this project does ≈ 50 writes/day. No secondary indexes until a query is measurably slow.
+
+**KV = small mutable state.** `oauth` (access token, refresh token, previous refresh token, expiry), `userId`, `status`, `paused_until`, `pkce:<state>` (10-minute TTL during consent). Writes ≈ 10–50/day, under the 1,000/day free cap.
 
 **Secrets** via `wrangler secret put`: `X_CLIENT_ID`, `X_CLIENT_SECRET`, optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Locally `.dev.vars` (gitignored). `wrangler.toml.example` committed; real `wrangler.toml` gitignored.
 
@@ -62,17 +82,18 @@ External calls: `api.x.com/2/*` (OAuth bearer), `x.com/i/oauth2/authorize` (brow
 - **OAuth.** `/oauth/start`: generate `code_verifier`/S256 challenge + random `state`, store in KV, redirect to `https://x.com/i/oauth2/authorize` with `scope=bookmark.read tweet.read users.read offline.access`. `/oauth/callback`: verify state, POST `https://api.x.com/2/oauth2/token` with `Authorization: Basic base64(client_id:client_secret)` + `code_verifier`; store tokens; call `GET /2/users/me` once and cache `userId`; clear `paused_until`.
 - **Token refresh (rotation-safe).** If `expiresAt − now < 5 min`: POST refresh → **write the new token pair to KV first**, keeping the old refresh token as `prevRefresh`. If refresh fails with the current token, try `prevRefresh` once. If both fail → set `status.auth = needs_reauth`, pause, alert once with the `/oauth/start` link. (Refresh tokens are single-use and invalidated server-side immediately — `docs/research/2026-08-29-x-api-v2.md`.)
 - **Bookmarks request.** `expansions=attachments.media_keys&media.fields=media_key,type,variants,preview_image_url,duration_ms&tweet.fields=created_at,text,attachments`. No `author_id`/`user.fields` (may bill as $0.01 user reads; post URL is `https://x.com/i/status/<id>`, which needs no handle).
-- **Video selection.** From `includes.media`, `type ∈ {video, animated_gif}`, choose max `bit_rate` among `content_type == video/mp4`. No variants → `failed:<id>` + log. Quoted-post video is out of v1 scope (needs an extra $0.005 lookup); recorded as a follow-up.
-- **Download.** `fetch(mp4)` → `R2.put(key, response.body, {httpMetadata: {contentType}, customMetadata})`. Requires `Content-Length` (verified exposed); if absent and `< 100 MB`, buffer; else skip + `failed:<id>`. Skip > 200 MB. Sequential, 1–2 s jitter, max 5 downloads/run; the rest wait for the next run.
+- **Video selection.** From `includes.media`, `type ∈ {video, animated_gif}`, choose max `bit_rate` among `content_type == video/mp4`. No variants → D1 `status=failed, error=no_variants` + log. Quoted-post video is out of v1 scope (needs an extra $0.005 lookup); recorded as a follow-up.
+- **Download.** `fetch(mp4)` → `R2.put(key, response.body, {httpMetadata: {contentType}, customMetadata})`. Requires `Content-Length` (verified exposed); if absent and `< 100 MB`, buffer; else `status=failed, error=no_length`. Skip > 200 MB (`error=too_large`). Sequential, 1–2 s jitter, max 5 downloads/run; the rest wait for the next run.
 - **Circuit breaker (ADR-0005).** 401 → attempt refresh once, else `needs_reauth` + pause 24 h. 403/429 → pause until `x-rate-limit-reset` (429) or 24 h (403), alert once. Hard caps in `src/limits.ts`: `MAX_API_REQUESTS_PER_RUN=3`, `MAX_DOWNLOADS_PER_RUN=5`, `MAX_FILE_BYTES=200 MB`, `STORAGE_ALERT_BYTES=9 GB` (alert, keep downloading — owner default Q6). `200 OK` with `data` present but zero media for 30 consecutive runs while `meta.result_count > 0` → alert "parser may be stale".
 - **Alerting.** Telegram Bot API, one `fetch`, one message per distinct condition, suppressed until cleared. Without Telegram secrets, `/status` and the index page are the only signal.
 - **Backfill.** `GET /backfill` (behind Access) paginates with `max_results=90` (pagination bug at 100) until no `next_token` or 800 items; same per-item path; resumable by construction; 15-minute wall limit → re-invoke. Runs once after first deploy (owner default Q4b).
-- **Consumption (Q2 = both).** `GET /` lists newest first: `<video controls preload="none" poster=previewUrl src="/v/<id>">`, text, post link, size, download link. `GET /v/:id` streams with `Range` support. Bulk: `rclone sync` against R2's S3 API with a scoped read-only token (runbook to be written at deploy time).
+- **Record.** After each item: D1 upsert with `status` ∈ {no_video, downloaded, failed} and `error`; `pending` only exists for video items deferred by the 5-per-run cap. Failed rows are not retried unless `error` is transient (`http_5xx`), which retries next run.
+- **Consumption (Q2 = both).** `GET /` = `SELECT … FROM bookmarks WHERE status='downloaded' ORDER BY first_seen_at DESC`, rendered as: `<video controls preload="none" poster=previewUrl src="/v/<id>">`, text, post link, size, download link. `GET /v/:id` streams with `Range` support. Bulk: `rclone sync` against R2's S3 API with a scoped read-only token (runbook to be written at deploy time).
 
 ## 6. Cost
 | Item | Monthly |
 |---|---|
-| Workers, KV, R2 ops, Access, cron | $0 (free tiers) |
+| Workers, KV, D1, R2 ops, Access, cron | $0 (free tiers) |
 | X API reads (≈23 deduped posts/day) | ≈ $0.70 at Owned-Reads rate; ≤ $3.50 at standard rate; spending limit $10/cycle |
 | R2 storage over 10 GB | $0.015/GB-month |
 | Workers Paid (only if streaming trips the Free 10 ms CPU cap — owner approved) | $5 |
@@ -81,13 +102,14 @@ External calls: `api.x.com/2/*` (OAuth bearer), `x.com/i/oauth2/authorize` (brow
 Client secret and tokens are far lower-value than session cookies (revocable at x.com/settings/connected_apps; scoped read-only) — ADR-0002. Still: never log tokens (one helper builds auth headers; test asserts no leak); scoped Cloudflare API tokens; R2 bucket lock; Cloudflare budget alert; `.dev.vars`/`wrangler.toml` gitignored; gitleaks pre-commit.
 
 ## 8. Testing (ADR-0006)
-`node --test`, stdlib only. Fixtures: one scrubbed real bookmarks response (video, animated_gif, photo-only, multi-video, no-variants). Tests: `parseBookmarks(fixture)` → expected list; `selectVariant` edge cases; `buildAuthHeader` never leaks into serialized logs; refresh-rotation state machine (success, first fails/prev succeeds, both fail → needs_reauth); circuit-breaker transitions on 401/403/429. Manual acceptance: deploy → `/oauth/start` → bookmark one video → within 30 min it appears at `/`.
+`node --test`, stdlib only. Fixtures: one scrubbed real bookmarks response (video, animated_gif, photo-only, multi-video, no-variants). Tests: `parseBookmarks(fixture)` → expected list; `selectVariant` edge cases; `buildAuthHeader` never leaks into serialized logs; refresh-rotation state machine (success, first fails/prev succeeds, both fail → needs_reauth); circuit-breaker transitions on 401/403/429; D1 upsert idempotence (same fixture twice → identical rows; `downloaded` never downgraded) using `wrangler dev --test`/miniflare or a stub `D1Database`. Manual acceptance: deploy → `/oauth/start` → bookmark one video → within 30 min it appears at `/`.
 
 ## 9. Open items / follow-ups (not blocking)
 - Owned-Reads rate may not yet apply to bookmarks — confirm from the first console usage report.
 - `animated_gif` variants shape unverified — parser must tolerate absence.
 - Quoted-post video support — later, if the owner misses it.
 - Free-plan CPU cap on large streams — if Error 1102 appears, move to Workers Paid (approved).
+- **v2 (owner intent, 2026-08-29):** list/search/filter UI over the `bookmarks` table, including non-video bookmarks. No schema change expected; tags/notes = `ALTER TABLE ADD COLUMN`.
 
 ## 10. Out of scope for v1
-D1, Queues, Workflows, Durable Objects, thumbnails generation, transcoding, search, multi-user, SPA dashboard, images/text archiving, quoted-post video.
+Queues, Workflows, Durable Objects, thumbnail generation, transcoding, search/filter UI (v2, §9), multi-user, SPA dashboard, images archiving, quoted-post video.

@@ -2,6 +2,12 @@
 
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-29 — Owner asked for a bookmark index + future search UI → D1 added (ADR-0007)
+- Did: owner asked where videos/records/bookmark tracking live, then stated a firm future need (list/search UI, all bookmarks incl. non-video). Verified D1 facts via the Cloudflare docs MCP; wrote ADR-0007; marked ADR-0003 superseded in part; patched the spec (§1, §3 diagram, §4 D1 component + schema, §5 record step, §6, §8, §9 v2 note, §10). No product code.
+- Decided: see ADR-0007 — one D1 table `bookmarks` records every bookmark seen; R2 `head(key)` stays the download truth; KV `failed:<id>` keys replaced by `status='failed'` rows; raw SQL, no ORM, no indexes yet.
+- Learned / gotcha: the part that cannot be retrofitted is *recording non-video bookmarks* (X API returns only the 800 most recent, billed per read); the video index could always be rebuilt from R2 `customMetadata`. D1 free tier: 5M row reads/day, 100k writes/day, 5 GB (developers.cloudflare.com/workers/platform/pricing/#d1).
+- Left undone: spec still PROPOSED pending owner "approved"; no plan yet.
+
 ## 2026-08-29 — Cloudflare agent setup: skills + MCP plugin installed
 - Did: owner asked to run `https://developers.cloudflare.com/agent-setup/prompt.md`. Ran `claude plugin marketplace add cloudflare/skills` and `claude plugin install cloudflare@cloudflare` (user scope, v1.0.0). Installs 13 skills (`wrangler`, `workers-best-practices`, `durable-objects`, `agents-sdk`, `cloudflare`, …) and 5 MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`). No repo code changed.
 - Decided: nothing product-level. Future sessions: the `cloudflare-docs` MCP (no auth) is a valid source for hard rule 5 alongside Context7; use the `wrangler` / `workers-best-practices` skills when scaffolding the Worker.
