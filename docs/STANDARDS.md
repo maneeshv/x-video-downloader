@@ -87,4 +87,4 @@ When: <trigger> | Last verified: YYYY-MM-DD
 ```
 
 ## Anti-patterns
-Two files saying "what's next" · README as knowledge base · raw session transcripts as "memory" · undated notes · editing a frozen spec to match what got built · TODOs in code · docs committed separately from the code they describe · CLAUDE.md over 80 lines.
+Two files saying "what's next" · README as knowledge base · raw session transcripts as "memory" · undated notes · editing a frozen spec to match what got built · TODOs in code · docs committed separately from the code they describe · CLAUDE.md over 80 lines · answering an owner "why?" in chat without an ADR to point at.

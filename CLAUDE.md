@@ -33,6 +33,8 @@ END (before saying "done"):
 1. Prepend an entry to `docs/JOURNAL.md` (template in `docs/STANDARDS.md`).
 2. Rewrite `docs/STATUS.md` so Now / Next / Blocked are true as of today.
 3. Non-obvious choice made → new ADR. Choice deferred → line in `docs/QUESTIONS.md`.
+   Owner asks "why is it done this way?" and the answer is not already an ADR → that is a
+   gap: write the ADR in the same session (context, decision, reasoning, revisit-when).
 4. Commit docs in the same commit as the code they describe.
 5. Run `scripts/check-session.sh` — it fails if code changed but JOURNAL/STATUS did not.
 
