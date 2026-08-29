@@ -6,6 +6,7 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
 - Did: owner asked where videos/records/bookmark tracking live, then stated a firm future need (list/search UI, all bookmarks incl. non-video). Verified D1 facts via the Cloudflare docs MCP; wrote ADR-0007; marked ADR-0003 superseded in part; patched the spec (§1, §3 diagram, §4 D1 component + schema, §5 record step, §6, §8, §9 v2 note, §10). No product code.
 - Decided: see ADR-0007 — one D1 table `bookmarks` records every bookmark seen; R2 `head(key)` stays the download truth; KV `failed:<id>` keys replaced by `status='failed'` rows; raw SQL, no ORM, no indexes yet.
 - Learned / gotcha: the part that cannot be retrofitted is *recording non-video bookmarks* (X API returns only the 800 most recent, billed per read); the video index could always be rebuilt from R2 `customMetadata`. D1 free tier: 5M row reads/day, 100k writes/day, 5 GB (developers.cloudflare.com/workers/platform/pricing/#d1).
+- Did (later same session): owner asked whether fetch and download are split across two Workers/a queue; the single-Worker choice was only implicit in ADR-0003 → wrote ADR-0008 making it explicit with the reasoning.
 - Left undone: spec still PROPOSED pending owner "approved"; no plan yet.
 
 ## 2026-08-29 — Cloudflare agent setup: skills + MCP plugin installed

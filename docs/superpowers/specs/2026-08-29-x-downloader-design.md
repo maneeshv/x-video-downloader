@@ -1,9 +1,9 @@
 # x-downloader — system design
 Date: 2026-08-29 (revised twice same day: owner answers Q1=c/Q5=yes; then owner asked for a bookmark index → D1, ADR-0007) | Status: **PROPOSED — revision awaiting owner review**
-Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0007
+Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0008
 
 ## 1. Summary
-A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner's bookmarks through the **official X API v2** (OAuth 2.0 user context, pay-per-use), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser, no session cookies, no queue.** One D1 table records every bookmark the cron sees (video or not) so the planned v2 list/search UI needs no backfill; R2 remains the source of truth for what is downloaded (ADR-0007). Compute and storage run on free tiers; the X API costs ≈ $0.70/month (≤ $3.50 worst case); storage beyond 10 GB is the only other cost.
+A single Cloudflare Worker, triggered by cron every 30 minutes, reads the owner's bookmarks through the **official X API v2** (OAuth 2.0 user context, pay-per-use), finds video posts not yet in R2, streams each mp4 into R2, and exposes a private, Cloudflare-Access-protected page to watch or download them. **No headless browser, no session cookies, no queue (ADR-0008: one Worker fetches and downloads in the same cron run).** One D1 table records every bookmark the cron sees (video or not) so the planned v2 list/search UI needs no backfill; R2 remains the source of truth for what is downloaded (ADR-0007). Compute and storage run on free tiers; the X API costs ≈ $0.70/month (≤ $3.50 worst case); storage beyond 10 GB is the only other cost.
 
 ## 2. Approaches considered (decided in ADR-0002)
 | # | Approach | Cost | Verdict |
