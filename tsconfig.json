@@ -5,7 +5,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "lib": ["esnext"],
-    "types": ["./worker-configuration.d.ts", "node"],
+    "types": ["./worker-configuration.d.ts"],
     "strict": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
@@ -13,5 +13,5 @@
     "rewriteRelativeImportExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "worker-configuration.d.ts"]
+  "include": ["src", "worker-configuration.d.ts"]
 }

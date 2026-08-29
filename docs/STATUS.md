@@ -14,7 +14,7 @@ Updated: 2026-08-29
 - Enabling Cloudflare Access on the workers.dev route is a dashboard click (owner, or agent via the authenticated Cloudflare MCP once `/mcp` is authorized).
 
 ## Done recently
-- 2026-08-29 Task 1 typecheck gap fixed: `@types/node` (types-only) devDependency + `tsconfig` `types`; ADR-0006 amended again.
+- 2026-08-29 Task 1 typecheck split: Node globals scoped to `tsconfig.test.json` only (`src/` stays workerd-only); stale JOURNAL line fixed; ADR-0006 amended again.
 - 2026-08-29 Spec approved; plan written (9 tasks); ADR-0006 amended (`#src/*` imports).
 - 2026-08-29 `docs/GOTCHAS.md`, `docs/runbooks/agent-setup.md`, CLAUDE.md rule 7, ADR-0007 (D1 index), ADR-0008 (single Worker).
 - 2026-08-29 Owner decided official X API (ADRs 0002–0006); X API v2 research; runbooks for X app setup and re-auth.
