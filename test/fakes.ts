@@ -83,6 +83,23 @@ export class FakeR2 {
   }
 }
 
+export async function makeSigner(kid = "kid1") {
+  // workerd's ambient SubtleCrypto.generateKey (worker-configuration.d.ts) has one
+  // un-discriminated overload returning `CryptoKey | CryptoKeyPair`; RSASSA-PKCS1-v1_5
+  // with usages ["sign", "verify"] always yields a pair at runtime.
+  const kp = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
+  const jwk = { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)), kid, alg: "RS256", use: "sig" };
+  const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  return {
+    jwk,
+    async sign(payload: Record<string, unknown>, header: Record<string, unknown> = { alg: "RS256", kid, typ: "JWT" }) {
+      const signing = `${enc(header)}.${enc(payload)}`;
+      const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", kp.privateKey, new TextEncoder().encode(signing));
+      return `${signing}.${Buffer.from(sig).toString("base64url")}`;
+    },
+  };
+}
+
 export class FakeD1 {
   db = new DatabaseSync(":memory:");
   constructor(schema = SCHEMA) {

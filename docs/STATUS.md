@@ -1,7 +1,7 @@
 Updated: 2026-08-29
 
 ## Now
-- Tasks 1–5 done (scaffold, limits, bookmarks parser, OAuth/API calls, `src/store.ts` KV/D1/R2). Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29); Task 6 (`src/access.ts` — Cloudflare Access JWT) next, then 7–8, TDD, subagent-driven. Product code is now allowed.
+- Tasks 1–6 done (scaffold, limits, bookmarks parser, OAuth/API calls, `src/store.ts` KV/D1/R2, `src/access.ts` Cloudflare Access JWT). Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29); Task 7 (`src/sync.ts` — run loop, downloads, circuit breaker, alerts) next, then 8, TDD, subagent-driven. Product code is now allowed.
 
 ## Next
 1. Task 9 of the plan: create R2/KV/D1, migrate, deploy, enable Access, secrets, X callback URL, `/oauth/start`, one `/backfill`.
@@ -14,6 +14,7 @@ Updated: 2026-08-29
 - Enabling Cloudflare Access on the workers.dev route is a dashboard click (owner, or agent via the authenticated Cloudflare MCP once `/mcp` is authorized).
 
 ## Done recently
+- 2026-08-29 Task 6: `src/access.ts` — `verifyAccessJwt` (RS256 JWT verify via `crypto.subtle`, JWKS fetched from `${teamDomain}/cdn-cgi/access/certs` and cached module-level for 10 min, checks `iss`/`aud`/`exp`/signature), `test/access.test.ts`, `test/fakes.ts` gains `makeSigner`. No dependency.
 - 2026-08-29 Task 5: `src/store.ts` — `Store` class (KV tokens/status/pause/PKCE, D1 idempotent upsert that never downgrades `downloaded`, R2 has/putVideo/getVideo), `test/store.test.ts`, `test/fakes.ts` gains `FakeKV`/`FakeR2`/`FakeD1`/`SCHEMA`.
 - 2026-08-29 Task 4: OAuth 2.0 PKCE + token exchange/refresh + fetchMe/fetchBookmarks (`src/x.ts`), `test/x.oauth.test.ts`, `test/fakes.ts` (fakeFetch + fixture loader).
 - 2026-08-29 Task 3: bookmarks parser (selectVariant, parseBookmarks) with fixture and TDD tests.
