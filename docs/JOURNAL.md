@@ -2,6 +2,12 @@
 
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-29 — Task 3: Parse bookmarks response, select best mp4 variant
+- Did: implemented Task 3 of `docs/superpowers/plans/2026-08-29-v1-worker.md` — `src/x.ts`, `test/fixtures/bookmarks.json`, `test/x.parse.test.ts`. TDD: created failing test (RED: `ERR_MODULE_NOT_FOUND` on `#src/x`), wrote fixture with all test cases (single video, animated_gif, photo-only, two videos, no variants, plain text), wrote parsing code for selectVariant (filter mp4, pick highest bit_rate) and parseBookmarks (map media by key, build Item records with postUrl/previewUrl/hasVideoMedia/videos), tests passed (GREEN: all 7 tests pass), typecheck clean.
+- Decided: selectVariant picks the highest bit_rate mp4 among variants, returning null if none match; parseBookmarks never drops a bookmark, even if no media found. For multi-video posts, keys are numbered `-1`, `-2`, etc. Used `fileURLToPath` + `path.join` to load fixtures for proper TypeScript type compatibility (avoids URL type mismatch between worker-configuration.d.ts and Node types).
+- Learned / gotcha: TypeScript's tsconfig split (src/ workerd-only vs test/ with Node globals) required fixture path handling via `fileURLToPath` rather than `new URL(...).toString()` to resolve type conflicts; direct URL passing to readFileSync causes overload resolution errors with worker-configuration.d.ts.
+- Left undone: nothing for Task 3; Task 4 next.
+
 ## 2026-08-29 — Task 2: Hard caps and X API constants
 - Did: implemented Task 2 of `docs/superpowers/plans/2026-08-29-v1-worker.md` — `src/limits.ts` and `test/limits.test.ts`. TDD: created failing test (RED: "undefined !== 3" on MAX_API_REQUESTS_PER_RUN), wrote all 19 export constants from the brief (hard caps, X OAuth URLs, API base URL, bookmarks query, video key regex), tests passed (GREEN: all 4 tests pass), typecheck clean. All cap values (MAX_FILE_BYTES, STORAGE_ALERT_BYTES, etc.) and API URLs are compile-time constants by design per ADR-0005 — raising any is a code change + journal line.
 - Decided: no abstractions — 19 bare `export const` statements with inline comments citing ADRs/spec/gotchas (e.g., `>90 breaks next_token`, `$0.01 user-read billing` if we added `author_id`). BOOKMARK_QUERY carefully excludes `author_id`/`user.fields` per research notes.
