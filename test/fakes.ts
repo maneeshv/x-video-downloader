@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 export type Scripted = { status: number; body?: unknown; headers?: Record<string, string>; bodyBytes?: Uint8Array };
 export type FakeFetch = typeof fetch & { calls: [string, RequestInit][] };
@@ -23,3 +24,92 @@ export function fakeFetch(script: Scripted[] | ((url: string, init: RequestInit)
 
 export const fixture = (name: string): any =>
   JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", name), "utf8"));
+
+// ruling 2: same fileURLToPath+join pattern as fixture() — the Workers `URL` type
+// clashes with Node's `readFileSync(URL)` overload under tsconfig.test.json.
+export const SCHEMA = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "migrations", "0001_bookmarks.sql"),
+  "utf8",
+);
+
+export class FakeKV {
+  map = new Map<string, string>();
+  async get(key: string, type?: "text" | "json"): Promise<unknown> {
+    const v = this.map.get(key) ?? null;
+    return v !== null && type === "json" ? JSON.parse(v) : v;
+  }
+  async put(key: string, value: string): Promise<void> {
+    this.map.set(key, value);
+  }
+  async delete(key: string): Promise<void> {
+    this.map.delete(key);
+  }
+  asKV(): KVNamespace {
+    return this as unknown as KVNamespace;
+  }
+}
+
+export class FakeR2 {
+  objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string>; contentType: string }>();
+  async head(key: string) {
+    const o = this.objects.get(key);
+    return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata } : null;
+  }
+  async put(key: string, body: ReadableStream | ArrayBuffer | Uint8Array | string, opts: any = {}) {
+    const bytes = new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
+    this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "" });
+    return { key, size: bytes.byteLength };
+  }
+  async get(key: string, opts: { range?: Headers } = {}) {
+    const o = this.objects.get(key);
+    if (!o) return null;
+    const m = /bytes=(\d+)-(\d*)/.exec(opts.range?.get("range") ?? "");
+    const start = m ? Number(m[1]) : 0,
+      end = m && m[2] ? Number(m[2]) + 1 : o.bytes.byteLength;
+    const slice = o.bytes.slice(start, end);
+    return {
+      key,
+      size: o.bytes.byteLength,
+      httpEtag: `"${key}"`,
+      body: new Response(slice).body,
+      range: m ? { offset: start, length: end - start } : undefined,
+      writeHttpMetadata: (h: Headers) => {
+        h.set("content-type", o.contentType);
+      },
+    };
+  }
+  asR2(): R2Bucket {
+    return this as unknown as R2Bucket;
+  }
+}
+
+export class FakeD1 {
+  db = new DatabaseSync(":memory:");
+  constructor(schema = SCHEMA) {
+    this.db.exec(schema);
+  }
+  prepare(sql: string) {
+    const db = this.db;
+    let args: unknown[] = [];
+    const stmt = {
+      bind(...a: unknown[]) {
+        args = a.map((x) => (x === undefined ? null : x));
+        return stmt;
+      },
+      async run() {
+        db.prepare(sql).run(...(args as never[]));
+        return { success: true };
+      },
+      async all<T>() {
+        return { results: db.prepare(sql).all(...(args as never[])) as T[] };
+      },
+      async first<T>() {
+        return ((db.prepare(sql).get(...(args as never[])) as T | undefined) ?? null);
+      },
+    };
+    return stmt;
+  }
+  asD1(): D1Database {
+    return this as unknown as D1Database;
+  }
+}
