@@ -15,6 +15,7 @@ Updated: 2026-08-29
 - Step 3's deploy/OAuth steps need the owner's X app credentials (step 2).
 
 ## Done recently
+- 2026-08-29 Installed the Cloudflare Claude Code plugin (skills + 5 MCP servers, user scope); owner to run `/reload-plugins`.
 - 2026-08-29 Owner decided: official X API (Q1 = c), Workers Paid OK if needed (Q5), defaults for Q2–Q8 → ADRs 0002–0006.
 - 2026-08-29 X API v2 research (`docs/research/2026-08-29-x-api-v2.md`); spec revised to approach B; runbooks `setup-x-developer-app.md`, `refresh-auth.md`.
 - 2026-08-29 Repo scaffold, docs-as-memory system, five-persona brainstorm, initial spec.

@@ -2,6 +2,12 @@
 
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-29 — Cloudflare agent setup: skills + MCP plugin installed
+- Did: owner asked to run `https://developers.cloudflare.com/agent-setup/prompt.md`. Ran `claude plugin marketplace add cloudflare/skills` and `claude plugin install cloudflare@cloudflare` (user scope, v1.0.0). Installs 13 skills (`wrangler`, `workers-best-practices`, `durable-objects`, `agents-sdk`, `cloudflare`, …) and 5 MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`). No repo code changed.
+- Decided: nothing product-level. Future sessions: the `cloudflare-docs` MCP (no auth) is a valid source for hard rule 5 alongside Context7; use the `wrangler` / `workers-best-practices` skills when scaffolding the Worker.
+- Learned / gotcha: the sandbox blocks writes to `~/.claude/plugins`; the plugin commands had to run with the sandbox disabled once. Plugin needs `/reload-plugins` (or a restart) before its skills/MCPs appear; the authenticated MCPs OAuth on first tool use.
+- Left undone: `/reload-plugins` not run (owner must do it in the interactive session). Nothing else.
+
 ## 2026-08-29 — Owner answers: official X API chosen; spec revised; ADRs 0002–0006
 - Did: owner answered Q1 = (c) official pay-per-use API, Q5 = yes, defaults for the rest. Ran a research pass on X API v2 (`docs/research/2026-08-29-x-api-v2.md`); rewrote the spec for approach B (OAuth 2.0 PKCE, rotation-safe refresh, bookmarks endpoint fields, cost table); wrote ADRs 0002–0006; cleared `docs/QUESTIONS.md`; added runbooks `setup-x-developer-app.md` and `refresh-auth.md` (from docs, not yet executed).
 - Decided: ADR-0002 official API over cookies/browser; ADR-0003 R2 key as ledger; ADR-0004 Access-gated route; ADR-0005 caps + circuit breaker as constants; ADR-0006 TS + wrangler + node --test.
