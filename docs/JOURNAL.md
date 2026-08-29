@@ -2,6 +2,12 @@
 
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-29 — Spec APPROVED; v1 implementation plan written; owner credentials checked
+- Did: owner approved the spec (status flipped to APPROVED, frozen). Verified `.env` is gitignored/untracked and inspected key *names* only. Ran `wrangler whoami` (logged in, account `x-video-downloader-project`). Verified Node 25.6 (native TS type stripping, `node:sqlite`, WebCrypto) and D1/R2/KV/Access/cron facts via the Cloudflare docs MCP + Context7. Wrote `docs/superpowers/plans/2026-08-29-v1-worker.md` (9 tasks, TDD, full code per step) with the writing-plans skill.
+- Decided: ADR-0006 amended — `#src/*` subpath imports instead of tsconfig paths. Test doubles: `node:sqlite` as the D1 fake (real SQL under test), in-memory KV/R2 fakes, WebCrypto-signed JWTs for the Access test. Access JWT verified with WebCrypto, no `jose` dependency. `PUBLIC_ORIGIN` var for the exact OAuth callback URL.
+- Learned / gotcha: `.env` holds `X_CONSUMER_KEY`/`X_SECRET_KEY` (OAuth 1.0a) and `X_BEARER_TOKEN` (app-only) — none can read bookmarks. The bookmarks flow needs the **OAuth 2.0 Client ID + Client Secret** from the app's *User authentication settings*. `TELEGRAM_CHAT_ID` is also missing. npm/wrangler network commands need the sandbox off (`~/.npm/_cacache` is outside the allowlist).
+- Left undone: execution of the plan (starting now, subagent-driven). Task 9 (deploy) blocked on the two credentials above.
+
 ## 2026-08-29 — Owner asked for a bookmark index + future search UI → D1 added (ADR-0007)
 - Did: owner asked where videos/records/bookmark tracking live, then stated a firm future need (list/search UI, all bookmarks incl. non-video). Verified D1 facts via the Cloudflare docs MCP; wrote ADR-0007; marked ADR-0003 superseded in part; patched the spec (§1, §3 diagram, §4 D1 component + schema, §5 record step, §6, §8, §9 v2 note, §10). No product code.
 - Decided: see ADR-0007 — one D1 table `bookmarks` records every bookmark seen; R2 `head(key)` stays the download truth; KV `failed:<id>` keys replaced by `status='failed'` rows; raw SQL, no ORM, no indexes yet.

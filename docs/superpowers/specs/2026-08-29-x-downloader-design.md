@@ -1,5 +1,5 @@
 # x-downloader — system design
-Date: 2026-08-29 (revised twice same day: owner answers Q1=c/Q5=yes; then owner asked for a bookmark index → D1, ADR-0007) | Status: **PROPOSED — revision awaiting owner review**
+Date: 2026-08-29 (revised twice same day: owner answers Q1=c/Q5=yes; then owner asked for a bookmark index → D1, ADR-0007) | Status: **APPROVED 2026-08-29** by the owner (frozen; changes go in a new dated spec)
 Evidence: `docs/research/2026-08-29-persona-*.md`, `docs/research/2026-08-29-x-api-v2.md` · Decisions: ADR-0002…0008
 
 ## 1. Summary
