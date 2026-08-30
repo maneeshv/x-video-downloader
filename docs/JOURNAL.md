@@ -2,9 +2,9 @@
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
 ## 2026-08-30 — v1 merged to `main` (PR #1)
-- Did: owner merged PR #1 (`v1-worker` → `main`, merge commit `8a82e93`). Fast-forwarded `main` with the one docs commit that post-dated the PR (`71a3cf9`), deleted `v1-worker` locally and on `origin`. 43/43 tests on `main`.
+- Did: owner merged PR #1 (`v1-worker` → `main`, merge commit `8a82e93`). The one docs commit that post-dated the PR (`71a3cf9`) could not fast-forward onto the merge commit; the script deleted `v1-worker` (local + `origin`) before that was noticed, so the commit was cherry-picked onto `main` from its still-present object. Nothing lost. 43/43 tests on `main`.
 - Decided: nothing new.
-- Learned / gotcha: none.
+- Learned / gotcha: never chain a branch delete after a merge step without `&&`/`set -e`; verify `git branch --merged main` first.
 - Left undone: owner to confirm CI green; backlog still draining via cron (150 pending at merge time).
 
 ## 2026-08-30 — CI: tests + typecheck on PRs (owner: "add CI")
