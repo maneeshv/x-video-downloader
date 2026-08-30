@@ -9,7 +9,7 @@ Status: **v1 running** (since 2026-08-30). Live state: `docs/STATUS.md`.
 - Setup and deploy: `docs/runbooks/setup-x-developer-app.md`, then `docs/runbooks/deploy.md`.
 - How it works: `docs/ARCHITECTURE.md`. Why it is this way: `docs/decisions/`.
 - Secrets: copy `.env.example` → `.env`; config: copy `wrangler.toml.example` → `wrangler.toml`. Neither is committed.
-- Develop: `npm install`, `npm test`, `npm run typecheck`. Deploy: `npx wrangler deploy` (manual by design, ADR-0010).
+- Develop: `npm install`, `npm test`, `npm run typecheck`. CI runs typecheck + tests on PRs; deploy is `npx wrangler deploy` (manual by design, ADR-0010).
 
 This repository is maintained entirely by an AI coding agent. Agents start with `CLAUDE.md`;
 humans start with `docs/PRODUCT.md`.

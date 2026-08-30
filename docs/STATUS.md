@@ -5,7 +5,7 @@ Updated: 2026-08-30
 - `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
 
 ## Next
-1. Owner: open the PR `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
+1. Owner: open the PR (this also triggers the first CI run — confirm it is green) `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
@@ -13,6 +13,7 @@ Updated: 2026-08-30
 - Nothing agent-side.
 
 ## Done recently
+- 2026-08-30 GitHub Actions `check` workflow (typecheck + tests on PRs); ADR-0010 amended.
 - 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
 - 2026-08-30 Playback fixed: `Content-Range` was `bytes NaN-NaN/size` (R2 range-object shape); `FakeR2` now mirrors R2; verified `play()` in-browser.
 - 2026-08-30 `Illegal invocation` download bug fixed + regression test; branches pushed to GitHub.

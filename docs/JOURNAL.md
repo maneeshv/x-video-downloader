@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — CI: tests + typecheck on PRs (owner: "add CI")
+- Did: `.github/workflows/check.yml` — checkout@v7, setup-node@v7 (Node 24, npm cache), `npm ci`, `npm run typecheck`, `npm test`; triggers on `pull_request` and push to `main`. Runs the two scripts directly rather than `npm run check`, because `scripts/check-session.sh` reasons about the local working tree, not a PR. ADR-0010 amended: CI checks, deploy still manual. README's deploy line already says manual.
+- Decided: ADR-0010 amendment.
+- Learned / gotcha: none.
+- Left undone: first workflow run happens when the PR is opened — the agent's `gh` is on a different GitHub account and cannot read Actions for the private repo; owner confirms the green check.
+
 ## 2026-08-30 — Owner asked how deploys work, whether README is current, and about `.env.example`
 - Did: playback confirmed by the owner. Answered: deploys are manual `wrangler deploy` from a logged-in laptop, no CI — that was undocumented, so ADR-0010. README still said "design phase"; rewritten (status, runbooks, dev commands, secrets/config files). Added `.env.example` (the 4 keys the Worker needs, with the OAuth-2.0-not-1.0a warning) and `!.env.example` in `.gitignore` (`.env*` was swallowing it). Noted `.env` still carries `X_CONSUMER_KEY`/`X_SECRET_KEY`/`X_BEARER_TOKEN`, which nothing reads.
 - Decided: ADR-0010 (manual deploy, revisit on second deployer / untested deploy / drift).
