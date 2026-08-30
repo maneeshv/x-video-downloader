@@ -50,14 +50,14 @@ Origin deployed 2026-08-30: `https://x-downloader.x-downloader.workers.dev`
 printed a "register a workers.dev subdomain" warning that resolved itself; DNS/TLS took ~1 minute
 to propagate before the origin answered.)
 
-### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`) — owner step, needs Access (step 6)
+### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`) — done 2026-08-30 (values in step 6)
 Edit `wrangler.toml` `[vars]` directly, then `npx wrangler deploy`. `PUBLIC_ORIGIN` is already set
 (step 3); `TEAM_DOMAIN`/`POLICY_AUD` need Access enabled first (step 6 below).
 
 ### 5. Secrets
 ```bash
-npx wrangler secret put X_CLIENT_ID          # from the X app's User authentication settings (owner)
-npx wrangler secret put X_CLIENT_SECRET      # ditto (owner)
+npx wrangler secret put X_CLIENT_ID          # done 2026-08-30, read from .env, never echoed
+npx wrangler secret put X_CLIENT_SECRET      # done 2026-08-30, ditto
 npx wrangler secret put TELEGRAM_BOT_TOKEN   # done 2026-08-30, read from .env, never echoed
 npx wrangler secret put TELEGRAM_CHAT_ID     # needs getUpdates first, see below (owner)
 ```
@@ -84,6 +84,11 @@ Then **Zero Trust → Access → Applications →** the app created for this rou
 **Application Audience (AUD) Tag**. The team domain is `https://<team>.cloudflareaccess.com`
 (shown in Zero Trust → Settings → Custom Pages, or the URL of the Zero Trust dashboard itself).
 Put both into `wrangler.toml` `[vars] TEAM_DOMAIN` / `POLICY_AUD`, then `npx wrangler deploy`.
+Done 2026-08-30: `TEAM_DOMAIN = "https://orange-sky-811f.cloudflareaccess.com"`,
+`POLICY_AUD = "51d1e95c9f203c9af5c21913bcaf90c001acd25aa195221228229ea0f3ede47c"` (both public — they appear in the
+Access login redirect — so recorded here for rebuilding `wrangler.toml`). Verified: `curl -si …/status` → `HTTP/2 302`
+to `<TEAM_DOMAIN>/cdn-cgi/access/login/…?kid=<POLICY_AUD>`. In the dialog, choose Scope **All traffic** (default is
+Previews only, which leaves production public) and add an Allow policy with rule Emails = owner.
 
 ### 7. X app callback URL
 In console.x.com, the app's **User authentication settings** callback URL must be exactly
