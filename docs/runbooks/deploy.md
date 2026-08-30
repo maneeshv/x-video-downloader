@@ -88,7 +88,11 @@ Done 2026-08-30: `TEAM_DOMAIN = "https://orange-sky-811f.cloudflareaccess.com"`,
 `POLICY_AUD = "51d1e95c9f203c9af5c21913bcaf90c001acd25aa195221228229ea0f3ede47c"` (both public — they appear in the
 Access login redirect — so recorded here for rebuilding `wrangler.toml`). Verified: `curl -si …/status` → `HTTP/2 302`
 to `<TEAM_DOMAIN>/cdn-cgi/access/login/…?kid=<POLICY_AUD>`. In the dialog, choose Scope **All traffic** (default is
-Previews only, which leaves production public) and add an Allow policy with rule Emails = owner.
+Previews only, which leaves production public). Policy as deployed: **Cloudflare account members** (Allow) — this
+selector only matches logins through the **Cloudflare** identity provider, so under Zero Trust → Access controls →
+Applications → `x-downloader - Cloudflare Workers` → login methods, enable **Cloudflare** and disable One-time PIN
+(the Worker's quick dialog only offers *Email domain*, which would admit all of gmail.com; the full-address *Emails*
+selector lives in Zero Trust → Access controls → Policies if ever needed).
 
 ### 7. X app callback URL
 In console.x.com, the app's **User authentication settings** callback URL must be exactly

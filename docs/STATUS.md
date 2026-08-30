@@ -1,20 +1,21 @@
 Updated: 2026-08-30
 
 ## Now
-- `v1-worker` is code-complete (43/43 tests, typecheck clean, final review clean) and ready to merge to `main`. See `docs/ARCHITECTURE.md` (as built).
-- **Deployed and gated**: `https://x-downloader.x-downloader.workers.dev` (version `bbc12cbd`) sits behind Cloudflare Access (owner email, one-time PIN), has the X OAuth 2.0 client secrets, R2/KV/D1 bound, cron every 30 min. Not yet authorized against X — nothing downloads until the owner completes `/oauth/start`.
+- End-to-end auth works: Access (Cloudflare IdP, account-members policy) → `/oauth/start` → `auth: ok`. First `/backfill` saw 354 bookmarks (156 with video) but **every download attempt throws** — 5 rows `pending`/`error=exception`, message swallowed. Logging added and deployed (`d3b4b637`); waiting for the next cron or a `/backfill` rerun to read the message via `wrangler tail`.
+- `v1-worker` is code-complete and ready for a PR; remote `origin` = `github.com-personal:maneeshv/x-video-downloader` but pushes are rejected (publickey).
 
-## Next (in order)
-1. Owner: get through the Access login (OTP email was not arriving as of 2026-08-30 — Access sends nothing if the typed email isn't allowed by the policy; new Zero Trust orgs default to "Sign in with Cloudflare" instead of OTP, which also works). Then
-2. Owner: open `https://x-downloader.x-downloader.workers.dev/oauth/start` (Access PIN login → X consent), then `/status` should show `auth: "ok"`; then open `/backfill` once and report the JSON (`docs/runbooks/deploy.md` step 9). If `seen>0`/`downloaded==0`, agent tries the `tweet.fields`→`post.fields` fallback.
-3. Agent: verify the first cron run (`docs/runbooks/deploy.md` step 10). Owner chose a **PR** for `v1-worker` → `main`; the repo has no git remote yet, so a GitHub repo must be created first (owner to confirm name/visibility).
+## Next
+1. Read the download exception from the log, fix root cause, redeploy, rerun `/backfill`, confirm `downloaded > 0` and a video plays on `/`.
+2. Owner: register `~/.ssh/github_personal.pub` on the `maneeshv` GitHub account; agent pushes `main` + `v1-worker` and opens the PR.
+3. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
-- Access OTP email not arriving (owner, dashboard) — see Next 1.
-- No git remote → PR cannot be raised until a GitHub repo exists (owner to confirm).
+- Download exception message (needs one more run with the new log line).
+- Push/PR — SSH key for `github.com-personal` not accepted by GitHub (owner).
 
 ## Done recently
+- 2026-08-30 Access switched to the Cloudflare IdP; OAuth completed; first backfill indexed 354 bookmarks into D1; download-exception logging added.
 - 2026-08-30 `TELEGRAM_CHAT_ID` secret set from `getUpdates`; test alert delivered to the owner's chat. All 4 secrets + 3 vars now in place.
 - 2026-08-30 Access enabled on the Production workers.dev route (owner); `TEAM_DOMAIN`/`POLICY_AUD` vars and `X_CLIENT_ID`/`X_CLIENT_SECRET` secrets set; redeployed; `/status` → 302 to the Access login (verified). Runbook §4/§5/§6 updated with the real dashboard path and values.
 - 2026-08-30 Final review fix wave + re-review fix: `/v/:key` 304 on If-Modified-Since, 416 only on an unsatisfiable Range (other R2 faults now propagate); `download()` refuses unknown-length bodies (ADR-0009); multi-video partial-`downloaded` rows now point `r2_key` at whichever video actually stored, not always `videos[0]`; 9 minors. `npm test` 43/43.

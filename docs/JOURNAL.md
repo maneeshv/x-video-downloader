@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — First real run: OAuth ok, backfill sees 354 bookmarks, 0 downloads (swallowed exception)
+- Did: owner passed Access via the Cloudflare IdP (the app's login method had to be switched from OTP; the `Cloudflare account members` policy only matches Cloudflare-IdP logins) and completed `/oauth/start`. `/status` → `auth: ok`. `/backfill` → `{pages:4, seen:354, downloaded:0, failed:5}`. D1: 198 `no_video`, 156 `has_video=1` (so `tweet.fields` + media expansion work), 151 `pending`, 5 `pending` with `error=exception`. The `catch {}` at `src/sync.ts` `processItem` dropped the message; added `console.error("download failed", key, err)` and redeployed (version `d3b4b637`). R2 docs: `customMetadata` accepts Unicode, so tweet text is not the cause.
+- Decided: nothing new.
+- Learned / gotcha: a bare `catch {}` around the one network+storage call in the system hid the only failure that mattered on day one. Access `Cloudflare account members` selector requires the Cloudflare identity provider as the app's login method — OTP logins never match it.
+- Left undone: identify the download exception (next cron or `/backfill` rerun with `wrangler tail`); push + PR blocked on the owner's SSH key not being registered with the `maneeshv` GitHub account.
+
 ## 2026-08-30 — Access enabled, X OAuth 2.0 secrets set, Worker redeployed (no longer dormant)
 - Did: owner enabled Access on the Production workers.dev row and supplied the AUD tag + team domain; set `TEAM_DOMAIN`/`POLICY_AUD` in `wrangler.toml`, `wrangler secret put X_CLIENT_ID`/`X_CLIENT_SECRET` from `.env` (never echoed), `wrangler deploy` (version `bbc12cbd`). Verified `/status` → 302 to the Access login with `kid` = our AUD. Recorded the public values in `docs/runbooks/deploy.md` §6.
 - Decided: nothing new.

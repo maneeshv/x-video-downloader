@@ -98,7 +98,7 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
     if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) continue;
     budget.downloads++;
     let r: Dl;
-    try { r = await download(d, it, v); } catch { r = { ok: false, status: "pending", error: "exception" }; }
+    try { r = await download(d, it, v); } catch (e) { console.error("download failed", v.key, String(e)); r = { ok: false, status: "pending", error: "exception" }; }
     if (r.ok) { bytes += r.bytes; stored++; firstStoredKey ??= v.key; res.downloaded++; res.bytes += r.bytes; }
     else { fail = r; res.failed++; }
     const [lo, hi] = DOWNLOAD_JITTER_MS;
