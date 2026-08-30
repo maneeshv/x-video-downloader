@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Log out button in the library UI (owner request; branch `feat/library-ui-logout-button`)
+- Did: `src/html.ts` — a `Log out` pill linking to `/cdn-cgi/access/logout` in the `<header>` of both `renderIndex` and `renderWatch`; the watch header became a flex row (`header,header form{display:flex…}`, `.out{margin-left:auto}`) so the pill sits at the far right on both pages. One new test in `test/index.test.ts` asserts both pages carry the href (52 → 53 tests; typecheck clean). ARCHITECTURE routes section notes that the path is answered by Cloudflare at the edge, never the Worker. Deleted the wrangler-sandbox GOTCHAS line as STATUS Next #4 instructed (baked into `agent-setup.md` step 5).
+- Decided: no ADR — the URL is Cloudflare's documented logout mechanism (https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/), not a design choice. Logout is team-wide (all Access apps), not per-app; acceptable for a single-owner tool.
+- Learned / gotcha: none.
+- Left undone: not deployed (owner deploy approval, per ADR-0010); PR to `main` not opened; not verified in-browser (the link is a plain href to a Cloudflare-owned path — verify once deployed by clicking it and confirming the Access login page appears).
+
 ## 2026-08-30 — Paseo worktree bootstrap copied from `mfg-agent` (owner request)
 - Did: added `.worktreeinclude` (this repo's gitignored-but-required files: `.claude/settings.local.json`, `wrangler.toml`, `worker-configuration.d.ts`, `.env*`, `.dev.vars*`), `paseo.json` (worktree setup = `npm ci && sh scripts/paseo/copy-worktree-includes.sh`), and `scripts/paseo/copy-worktree-includes.sh` verbatim from `DocketAI/.../services/mfg-agent`. Verified in a throwaway `git worktree` that the script copies `.env` and `wrangler.toml` in, then removed it.
 - Decided: nothing new (tooling only; no dependency).

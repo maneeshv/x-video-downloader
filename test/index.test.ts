@@ -207,3 +207,10 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   await a.send("/api/videos/12345", { method: "DELETE" });
   assert.equal((await a.get("/watch/12345")).status, 404, "deleted");
 });
+
+test("library and watch pages link to the Access logout URL", async () => {
+  const { renderIndex, renderWatch } = await import("#src/html");
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  assert.match(renderIndex([row], {}), /href="\/cdn-cgi\/access\/logout"/);
+  assert.match(renderWatch(row), /href="\/cdn-cgi\/access\/logout"/);
+});
