@@ -1,11 +1,11 @@
 Updated: 2026-08-30
 
 ## Now
-- Root cause of 0 downloads found and fixed: `deps.fetch()` called the global `fetch` as a method → `Illegal invocation`. Fixed in `src/index.ts`, regression test added, deployed. Awaiting the owner's `/backfill` rerun to confirm `downloaded > 0`.
+- **v1 works end to end** (2026-08-30): `/backfill` → 5 downloaded, 0 failed, 160 MB in R2; D1 has 354 rows (198 no_video, 151 pending). Pending videos drain at 5 per cron tick (every 30 min → ~15 h), or faster by hitting `/backfill` repeatedly.
 - `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
 
 ## Next
-1. Owner: rerun `/backfill`, paste JSON; confirm a video plays on `/`. Agent: check D1/R2 counts and `wrangler tail` for any new error.
+1. Owner: confirm a video plays on `/`.
 2. Owner: open the PR `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
 3. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
