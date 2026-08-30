@@ -5,7 +5,7 @@ import * as L from "#src/limits";
 test("caps match ADR-0005 / spec §5", () => {
   assert.equal(L.MAX_API_REQUESTS_PER_RUN, 3);
   assert.equal(L.MAX_DOWNLOADS_PER_RUN, 5);
-  assert.equal(L.MAX_FILE_BYTES, 200 * 1024 * 1024);
+  assert.equal(L.MAX_FILE_BYTES, 350 * 1024 * 1024);
   assert.equal(L.STORAGE_ALERT_BYTES, 9 * 1024 ** 3);
   assert.equal(L.BACKFILL_PAGE_SIZE, 90);
   assert.equal(L.BACKFILL_MAX_ITEMS, 800);

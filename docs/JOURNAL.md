@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — `MAX_FILE_BYTES` 200 → 350 MB (owner decision)
+- Did: constant, its test, ARCHITECTURE, ADR-0005 amendment note; QUESTIONS entry resolved and removed. Store was already empty, so no `too_large` rows needed resetting. Deployed.
+- Decided: ADR-0005 amended (350 MB).
+- Learned / gotcha: none.
+- Left undone: real-account `/oauth/start`; PR #2 merge.
+
 ## 2026-08-30 — Docs sweep (owner: "is everything up to date?")
 - Did: grep for stale claims found five: ARCHITECTURE "deployed but dormant" paragraph, a leftover "owner's email (OTP)" line in deploy.md §6, setup-x-developer-app "not yet executed", PRODUCT header "design phase", duplicate numbering in STATUS. Fixed all. Wrote `docs/runbooks/reset-store.md` (today's wipe/switch procedure) and pointed the GOTCHAS line at it. Moved the 200 MB cap decision into `docs/QUESTIONS.md` with default = keep.
 - Decided: nothing new.

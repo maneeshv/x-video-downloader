@@ -8,7 +8,6 @@ Updated: 2026-08-30
 0. Owner: sign in to x.com as the real account → `/oauth/start`; agent drains with `/backfill?downloads=30` (Paseo tab) and verifies playback.
 1. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`); confirm `check` is green on it (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
-3. `docs/QUESTIONS.md`: 200 MB per-video cap — default keep.
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
