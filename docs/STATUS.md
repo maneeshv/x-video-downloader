@@ -1,11 +1,12 @@
 Updated: 2026-08-30
 
 ## Now
-- **v1 works end to end and the backlog is drained** (2026-08-30): 142 videos / 3.08 GB in R2; D1 354 rows = 142 downloaded + 198 no_video + 13 too_large + 1 http_403; 0 pending. Cron now only picks up new bookmarks.
+- **v1 proven end to end on a test X account** (2026-08-30: 142 videos / 3.08 GB drained, playback verified), then **all data wiped** (R2, D1, KV login) to switch to the owner's real X account. Store is empty; cron runs but reports `needs_reauth` until the real account completes `/oauth/start`.
 - **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
-0. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`).
+0. Owner: sign in to x.com as the real account → `/oauth/start`; agent drains with `/backfill?downloads=30` (Paseo tab) and verifies playback.
+1. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`).
 1. Owner: confirm the `check` workflow ran green on PR #1 / the push to `main` (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 3. Owner decision pending: raise `MAX_FILE_BYTES` (200 MB) for the 13 `too_large` videos? Default keep.
