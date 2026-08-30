@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Paseo worktree bootstrap copied from `mfg-agent` (owner request)
+- Did: added `.worktreeinclude` (this repo's gitignored-but-required files: `.claude/settings.local.json`, `wrangler.toml`, `worker-configuration.d.ts`, `.env*`, `.dev.vars*`), `paseo.json` (worktree setup = `npm ci && sh scripts/paseo/copy-worktree-includes.sh`), and `scripts/paseo/copy-worktree-includes.sh` verbatim from `DocketAI/.../services/mfg-agent`. Verified in a throwaway `git worktree` that the script copies `.env` and `wrangler.toml` in, then removed it.
+- Decided: nothing new (tooling only; no dependency).
+- Learned / gotcha: none.
+- Left undone: nothing.
+
 ## 2026-08-30 — Video library UI (branch `library-ui`, tasks 1–6)
 - Did: Tasks 1–5 shipped the library UI: migration `0002_library.sql` (`title`, `description`,
   `favorite`, `deleted_at`); `src/store.ts` `listDownloaded()` → `listLibrary({q, fav, sort})`,
