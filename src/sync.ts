@@ -89,6 +89,8 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   // multi-video post permanently failed) — is not retried unless the error is transient
   // (http_5xx); "pending" rows (budget-deferred or transient failures) always retry.
   const prev = await d.store.getBookmark(it.postId);
+  // Owner deleted it (ADR-0011): the tombstone overrides the R2 ledger — never re-download.
+  if (prev?.deleted_at) return;
   if (prev && prev.status !== "pending" && prev.error && !prev.error.startsWith("http_5")) return;
   if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
   let bytes = 0, stored = 0, fail: Dl | null = null, firstStoredKey: string | null = null;

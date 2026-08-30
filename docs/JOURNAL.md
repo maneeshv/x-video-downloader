@@ -1,6 +1,50 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Paseo worktree bootstrap copied from `mfg-agent` (owner request)
+- Did: added `.worktreeinclude` (this repo's gitignored-but-required files: `.claude/settings.local.json`, `wrangler.toml`, `worker-configuration.d.ts`, `.env*`, `.dev.vars*`), `paseo.json` (worktree setup = `npm ci && sh scripts/paseo/copy-worktree-includes.sh`), and `scripts/paseo/copy-worktree-includes.sh` verbatim from `DocketAI/.../services/mfg-agent`. Verified in a throwaway `git worktree` that the script copies `.env` and `wrangler.toml` in, then removed it.
+- Decided: nothing new (tooling only; no dependency).
+- Learned / gotcha: none.
+- Left undone: nothing.
+
+## 2026-08-30 — Video library UI (branch `library-ui`, tasks 1–6)
+- Did: Tasks 1–5 shipped the library UI: migration `0002_library.sql` (`title`, `description`,
+  `favorite`, `deleted_at`); `src/store.ts` `listDownloaded()` → `listLibrary({q, fav, sort})`,
+  plus `updateMeta`, `markDeleted`, `deleteVideos`; `src/limits.ts` `POST_ID_RE`, `TITLE_MAX`=200,
+  `DESCRIPTION_MAX`=2000, `VERSION` bumped to `"v2"`; `src/sync.ts` `processItem()` skips a
+  tombstoned row before any R2 call; `src/index.ts` gained `GET /watch/:postId`,
+  `POST`/`DELETE /api/videos/:postId`, and `/` now takes `?q=&fav=1&sort=`; `src/html.ts`
+  rewritten (`renderIndex` grid, `renderWatch` page). Test count 43 → 52. Task 6 (this entry) made
+  the docs true: ADR-0011, ARCHITECTURE (routes, D1 schema, sync step, test doubles, related
+  ADRs), PRODUCT (non-goal line replaced, library scope bullet added), deploy runbook §2
+  (migration step now names both migration files and says "run before deploy"), STATUS.
+  Final-review fix wave: ARCHITECTURE 400 wording, ADR-0011 video-count estimate, delete/cron race comment, no-referrer meta, updated_at assertion in the tombstone test.
+- Decided: ADR-0011 — library metadata lives on the existing `bookmarks` row (no new table);
+  `DELETE /api/videos/:id` runs the R2 delete before the D1 tombstone, per the owner's 2026-08-30
+  choice that delete frees R2 space (over hide-only or keep-both).
+- Learned / gotcha: (a) `git cherry-pick -q` is not a valid flag; a `set -e` chain that continued
+  anyway deleted a branch before its commits were carried over — commits were recovered from their
+  SHAs. This re-trips the existing GOTCHAS/JOURNAL rule "never chain a branch delete without
+  verifying first" (see the 2026-08-30 "v1 merged to `main`" entry) — not promoting a new GOTCHAS
+  line since the rule already exists, but it clearly needs more than one restatement to stick.
+  (b) The plan's file-structure table omitted `test/smoke.test.ts` from Task 4's file list even
+  though it asserts `VERSION`; bumping the constant to `"v2"` required a one-line test update the
+  plan didn't call out.
+- Deployed (same day, owner: "Wrangler deploy approved"): wrangler OAuth token had expired (the sandbox gotcha, second confirmation) — recovered with `npx wrangler login --browser=false` in the background and the consent form completed in the Paseo browser tab (account `x-video-downloader-project` only). `wrangler d1 migrations apply --remote` → `0002_library.sql` ✅ (148 downloaded rows); `wrangler deploy` → version `82c1c5c3-3e6a-4a47-9f12-521023391187`. Verified in-browser through Access: grid 148 cards / 148 posters loaded / `no-referrer` meta; `?q=free` 3, no-match 0; `POST` 204 → favourites filter 0→1, title search 1, watch page shows the title; `text/plain` → 415; `?sort=title` ok; `<video>` played (readyState 4, 20 s of 1105 s); ★ toggled through the real page handler and persisted. Verification metadata reverted. Delete exercised only in tests. Branch pushed.
+- Learned / gotcha (c): the wrangler-sandbox token failure is now confirmed twice → baked into `docs/runbooks/agent-setup.md` step 5 (with the headless-login recovery); GOTCHAS line marked for deletion next session. Also: Paseo `browser_click` on an inactive tab drops clicks silently; `browser_evaluate` with `element.click()` is reliable.
+- Left undone: owner opens PR `library-ui` → `main` (after PR #2 `backfill-downloads`); CI green check. Follow-ups noted in STATUS (totalBytes never decreases on delete; `too_large` breakdown).
+## 2026-08-30 — Real account backfilled (owner: "backfill")
+- Did: `/backfill?downloads=1` from the Paseo tab → 3 pages / 253 seen (list exhausted) / 1 downloaded; then 7 × `/backfill?downloads=30` (23/7, 20/10, 19/11, 19/11, 26/4, 25/5, 8/1 downloaded/failed; 1.65–2.87 GB and 6–20 min each) and a confirmation `downloads=1` → 0/0. Final `/status`: `totalBytes` 14,562,640,345 (14.56 GB), `alerts.storage` 2026-08-30T12:00:37Z (Telegram sent once), `auth: ok`. Diagrams of the cron/backfill flow given to the owner in chat (not saved — ARCHITECTURE already describes it).
+- Decided: proceeded past the 10 GB R2 free tier without asking — Q6 default (alert, keep downloading) already covers it and overage is ≈ $0.07/mo; recorded in STATUS Next for the owner to confirm or trim.
+- Learned / gotcha: (1) `wrangler` run inside the Claude Code sandbox cannot write `~/Library/Preferences/.wrangler`; its OAuth refresh rotated the token but could not save it → "auth token has expired and could not be refreshed"; only interactive `wrangler login` recovers. Added to GOTCHAS. (2) Paseo `browser_navigate`/`browser_snapshot` time out at 15 s but the tab keeps the request open; a background `sleep` timer + later snapshot reads the finished JSON. (3) A round of 30 at ~100 MB/file takes 6–20 min, not the 2–3 min seen on the test account.
+- Left undone: exact failed/too_large breakdown from D1 (needs owner `wrangler login`); PR #2 merge; owner decision on R2 overage.
+
+## 2026-08-30 — Real X account connected; first cron run checked (owner: "check the status of the downloads")
+- Did: read live state with `wrangler kv key get … --remote` and `wrangler d1 execute x-downloader --remote` — no Access login needed. KV `status`: `auth: ok`, `lastRun 2026-08-30T10:31:54Z`, 1 page / 20 seen / 5 downloaded / 0 failed; D1: 5 downloaded (722 MB), 14 pending, 1 no_video; `paused_until` unset; `userId` = the real account. Only the cron's first 20-item page has run — no `/backfill` yet. STATUS rewritten (it still said "store empty / needs_reauth").
+- Decided: nothing new.
+- Learned / gotcha: real-account videos average ~145 MB (test account ~22 MB); 10 GB R2 free tier ≈ 70 videos, so the 9 GB alert will fire early in a full backfill. Not a re-trip fact — recorded in STATUS, not GOTCHAS.
+- Left undone: `/backfill?downloads=30` drain (owner to say go); PR #2 merge.
+
 ## 2026-08-30 — `MAX_FILE_BYTES` 200 → 350 MB (owner decision)
 - Did: constant, its test, ARCHITECTURE, ADR-0005 amendment note; QUESTIONS entry resolved and removed. Store was already empty, so no `too_large` rows needed resetting. Deployed.
 - Decided: ADR-0005 amended (350 MB).

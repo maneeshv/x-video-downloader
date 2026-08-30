@@ -1,6 +1,6 @@
 # Product: x-downloader
 
-Updated: 2026-08-30 (v1 shipped; scope unchanged since the 2026-08-29 revision)
+Updated: 2026-08-30 (v2 library UI shipped — search/filter/sort/favourite/title/description/delete)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.
@@ -12,7 +12,10 @@ One person: the owner, using their own X account and bookmarks. The project may 
 1. Owner bookmarks a video post in X (any client).
 2. A scheduled job in the cloud notices the new bookmark.
 3. The video file is downloaded to the owner's cloud storage, and the job remembers it so it is never downloaded twice.
-4. Owner watches or bulk-downloads the videos later from their storage.
+4. Owner browses a library page (`/`) — search, favourites filter, sort by newest/oldest/title —
+   and opens a per-video watch page (`/watch/:id`) to play the video, set a title/description,
+   toggle favourite, or delete it (shipped 2026-08-30, spec `2026-08-30-video-library-design.md`,
+   ADR-0011).
 
 ## Constraints (from the owner, 2026-08-29)
 - Runs **entirely in the cloud**: scheduling, downloading, storage. No home server, no laptop dependency.
@@ -26,7 +29,7 @@ One person: the owner, using their own X account and bookmarks. The project may 
 - Multi-user / SaaS. Design for one account.
 - Downloading images, threads, or text — videos only (GIF-as-mp4 included, since X serves them as mp4).
 - Transcoding, thumbnail generation, multi-user dashboards.
-- **v1 only:** search/filter UI and tagging. The owner wants these in v2 (stated 2026-08-29), so v1 records every bookmark in D1 from day one (ADR-0007) and nothing needs backfilling later.
+- Tagging, bulk actions, undo, un-bookmarking on X. (Search/filter/favourite/title/description/delete shipped 2026-08-30 — spec `2026-08-30-video-library-design.md`, ADR-0011.)
 - Automating the X login (username/password/2FA). The owner supplies a session; the tool never logs in.
 - Re-hosting or sharing videos publicly.
 

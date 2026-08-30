@@ -59,7 +59,7 @@ test("download cap leaves the rest pending; next run picks them up", async () =>
   assert.equal((await w.store.getBookmark("200000000000000006"))?.status, "pending");
   const r2 = await sync(w.d);
   assert.equal(r2.downloaded, 2);
-  assert.equal((await w.store.listDownloaded()).length, 7);
+  assert.equal((await w.store.listLibrary()).length, 7);
 });
 
 test("paused → skipped without any API call", async () => {
@@ -151,7 +151,7 @@ test("multi-video post with one permanently failed video: the stored sibling is 
   const row = await w.store.getBookmark("1000000000000000004");
   assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-1.mp4"]);
   assert.deepEqual([...w.r2.objects.keys()], ["1000000000000000004-1.mp4"]);
-  assert.ok((await w.store.listDownloaded()).some((x) => x.post_id === "1000000000000000004"), "listDownloaded includes the partial row");
+  assert.ok((await w.store.listLibrary()).some((x) => x.post_id === "1000000000000000004"), "listLibrary includes the partial row");
 
   const videoCalls = () => w.f.calls.filter(([u]) => u.includes("4a.mp4") || u.includes("4b.mp4")).length;
   const before = videoCalls();
@@ -250,4 +250,22 @@ test("backfill paginates with max_results=90 until no next_token", async () => {
   assert.equal(r.pages, 2); assert.equal(r.seen, 12);
   assert.equal(new URL(w.f.calls[0][0]).searchParams.get("max_results"), "90");
   assert.equal(new URL(w.f.calls.filter(([u]) => u.includes("/bookmarks"))[1][0]).searchParams.get("pagination_token"), "abc");
+});
+
+test("a deleted post is never re-downloaded even though its key is gone from R2 (ADR-0011)", async () => {
+  const w = world(routes(fx())); await authed(w.store);
+  await sync(w.d);
+  const id = "1000000000000000001";
+  await w.store.deleteVideos(id);
+  await w.store.markDeleted(id, "2026-08-30T00:00:00Z");
+  const before_updated = (await w.store.getBookmark(id))!.updated_at;
+  const before = w.f.calls.filter(([u]) => u.includes("video.twimg")).length;
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 0);
+  assert.equal(w.f.calls.filter(([u]) => u.includes("video.twimg")).length, before, "no download attempted");
+  assert.equal(w.r2.objects.has(`${id}.mp4`), false);
+  const b = (await w.store.getBookmark(id))!;
+  assert.equal(b.deleted_at, "2026-08-30T00:00:00Z");
+  assert.equal(b.status, "downloaded", "row untouched by the rerun");
+  assert.equal(b.updated_at, before_updated, "row untouched by the rerun");
 });

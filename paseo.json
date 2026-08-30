@@ -1,0 +1,5 @@
+{
+  "worktree": {
+    "setup": "npm ci && sh scripts/paseo/copy-worktree-includes.sh"
+  }
+}

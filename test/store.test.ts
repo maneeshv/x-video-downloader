@@ -41,15 +41,15 @@ test("upsert is idempotent, keeps first_seen_at, never downgrades downloaded", a
   assert.equal(b?.status, "downloaded");
   assert.equal(b?.r2_key, "1.mp4");
   assert.equal(b?.bytes, 10);
-  assert.equal((await s.listDownloaded()).length, 1);
+  assert.equal((await s.listLibrary()).length, 1);
 });
 
-test("listDownloaded is newest-first and only downloaded", async () => {
+test("listLibrary is newest-first and only downloaded", async () => {
   const { s } = mk();
   await s.upsertBookmark(row({ post_id: "1", now: "2026-08-01T00:00:00Z", status: "downloaded", r2_key: "1.mp4" }));
   await s.upsertBookmark(row({ post_id: "2", now: "2026-08-02T00:00:00Z", status: "downloaded", r2_key: "2.mp4" }));
   await s.upsertBookmark(row({ post_id: "3", now: "2026-08-03T00:00:00Z", status: "no_video", has_video: 0 }));
-  assert.deepEqual((await s.listDownloaded()).map((r) => r.post_id), ["2", "1"]);
+  assert.deepEqual((await s.listLibrary()).map((r) => r.post_id), ["2", "1"]);
 });
 
 test("putVideo stores metadata as strings; has() reflects R2", async () => {
@@ -60,4 +60,63 @@ test("putVideo stores metadata as strings; has() reflects R2", async () => {
   assert.equal(r2.objects.get("1.mp4")!.customMetadata.bitRate, "5");
   assert.equal(r2.objects.get("1.mp4")!.customMetadata.postedAt, "");
   assert.equal(r2.objects.get("1.mp4")!.contentType, "video/mp4");
+});
+
+test("migration 0002: library columns exist and default to unset", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row());
+  const b = (await s.getBookmark("1"))!;
+  assert.deepEqual([b.title, b.description, b.favorite, b.deleted_at], [null, null, 0, null]);
+});
+
+const dl = (s: Store, post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) =>
+  s.upsertBookmark(row({ post_id, status: "downloaded", r2_key: `${post_id}.mp4`, ...over }));
+
+test("listLibrary filters by q and fav, sorts, and hides deleted rows", async () => {
+  const { s } = mk();
+  await dl(s, "1", { text: "cats on mars", posted_at: "2026-08-01T00:00:00Z" });
+  await dl(s, "2", { text: "dogs", posted_at: "2026-08-02T00:00:00Z" });
+  await dl(s, "3", { text: "zebra", posted_at: "2026-08-03T00:00:00Z" });
+  await s.upsertBookmark(row({ post_id: "4", status: "pending", text: "cats pending" }));
+  await s.updateMeta("2", { title: "Alpha", favorite: true }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("3", { description: "about CATS" }, "2026-08-30T00:00:00Z");
+  const ids = async (q: Parameters<Store["listLibrary"]>[0] = {}) => (await s.listLibrary(q)).map((r) => r.post_id);
+  assert.deepEqual(await ids(), ["3", "2", "1"], "newest first by posted_at");
+  assert.deepEqual(await ids({ sort: "oldest" }), ["1", "2", "3"]);
+  assert.deepEqual(await ids({ sort: "title" }), ["2", "1", "3"], "title falls back to text; case-insensitive");
+  assert.deepEqual(await ids({ q: "cats" }), ["3", "1"], "matches text or description, not pending rows");
+  assert.deepEqual(await ids({ fav: true }), ["2"]);
+  assert.deepEqual(await ids({ q: "alpha", fav: true }), ["2"]);
+  assert.ok(await s.markDeleted("3", "2026-08-30T01:00:00Z"));
+  assert.deepEqual(await ids(), ["2", "1"], "deleted rows are hidden");
+  assert.deepEqual(await ids({ q: "cats" }), ["1"]);
+});
+
+test("updateMeta is partial, stores empty strings as NULL, and touches only live downloaded rows", async () => {
+  const { s } = mk();
+  await dl(s, "1");
+  await s.upsertBookmark(row({ post_id: "2", status: "pending" }));
+  assert.ok(await s.updateMeta("1", { title: "T", description: "D" }, "2026-08-30T00:00:00Z"));
+  assert.ok(await s.updateMeta("1", { favorite: true }, "2026-08-30T00:00:01Z"));
+  let b = (await s.getBookmark("1"))!;
+  assert.deepEqual([b.title, b.description, b.favorite, b.updated_at], ["T", "D", 1, "2026-08-30T00:00:01Z"]);
+  assert.ok(await s.updateMeta("1", { title: "" }, "2026-08-30T00:00:02Z"));
+  b = (await s.getBookmark("1"))!;
+  assert.deepEqual([b.title, b.description, b.favorite], [null, "D", 1], "only the given field changes; '' → NULL");
+  assert.equal(await s.updateMeta("2", { title: "x" }, "2026-08-30T00:00:03Z"), false, "pending rows are not editable");
+  assert.equal(await s.updateMeta("9", { title: "x" }, "2026-08-30T00:00:03Z"), false, "unknown id");
+  await s.markDeleted("1", "2026-08-30T00:00:04Z");
+  assert.equal(await s.updateMeta("1", { title: "x" }, "2026-08-30T00:00:05Z"), false, "deleted rows are not editable");
+});
+
+test("markDeleted is idempotent and keeps the first timestamp; deleteVideos removes every sibling key", async () => {
+  const { s, r2 } = mk();
+  await dl(s, "1", { r2_key: "1-1.mp4" });
+  for (const k of ["1-1.mp4", "1-2.mp4", "10.mp4"]) await r2.put(k, new Uint8Array([1]));
+  assert.ok(await s.markDeleted("1", "2026-08-30T00:00:00Z"));
+  assert.ok(await s.markDeleted("1", "2026-08-31T00:00:00Z"), "a repeat delete still reports a match");
+  assert.equal((await s.getBookmark("1"))!.deleted_at, "2026-08-30T00:00:00Z");
+  assert.equal(await s.markDeleted("2", "2026-08-30T00:00:00Z"), false, "unknown id");
+  await s.deleteVideos("1");
+  assert.deepEqual([...r2.objects.keys()], ["10.mp4"], "another post whose id shares the prefix survives");
 });

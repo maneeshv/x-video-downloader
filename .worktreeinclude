@@ -1,0 +1,13 @@
+# Gitignored files a fresh worktree needs. Copied by scripts/paseo/copy-worktree-includes.sh
+# (Paseo runs it from paseo.json "setup"). Missing paths are skipped.
+
+# Claude (local permission allowlist)
+.claude/settings.local.json
+
+# Wrangler: real binding ids + generated Workers types (regenerable with `npm run types`)
+wrangler.toml
+worker-configuration.d.ts
+
+# Secrets / local vars (never committed — hard rule 1)
+.env*
+.dev.vars*

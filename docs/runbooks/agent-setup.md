@@ -1,5 +1,5 @@
 # Set up a new machine / teammate to work on this repo with Claude Code
-When: first session on a new machine, or a teammate joins | Last verified: 2026-08-29 (owner's machine; plugin versions as of that date)
+When: first session on a new machine, or a teammate joins | Last verified: 2026-08-30 (owner's machine; plugin versions as of that date)
 
 Everything the agent needs to *know* is in the repo (`CLAUDE.md`, `docs/`). This runbook covers only the *tools* that live outside the repo, at user scope, and therefore do not clone with it.
 
@@ -19,6 +19,7 @@ Everything the agent needs to *know* is in the repo (`CLAUDE.md`, `docs/`). This
 3. Optional, only when deploying: `npm i -g wrangler` (or use `npx wrangler` from the project's `package.json` once it exists) and `wrangler login`. Never put Cloudflare or X credentials in the repo — see `docs/runbooks/setup-x-developer-app.md` and hard rule 1.
 4. Optional Python tooling uses `uv` (owner preference, hard rule in `CLAUDE.md`): `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 5. Sandbox note: Claude Code's Bash sandbox blocks writes inside `.git`, so `git commit` prompts once per command to run unsandboxed. Accept it, or run `/sandbox` and allow `.git` for this project.
+   **Never run `wrangler` inside the sandbox** (confirmed twice, 2026-08-30): `~/Library/Preferences/.wrangler` is read-only there, so when wrangler rotates its OAuth token the new one is lost and every later call fails with "auth token has expired and could not be refreshed" — only an interactive `wrangler login` recovers. Run every wrangler command unsandboxed (`dangerouslyDisableSandbox`), and if the token is already broken, either the owner runs `npx wrangler login` in a terminal, or the agent runs `npx wrangler login --browser=false` in the background and hands the printed URL to the owner (the callback lands on this machine).
 6. The MCP servers that need OAuth (`cloudflare-api`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`) authenticate on first use via `/mcp`. `cloudflare-docs` and `context7` need no auth.
 
 ## Verify

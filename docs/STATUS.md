@@ -1,28 +1,22 @@
 Updated: 2026-08-30
 
 ## Now
-- **v1 proven end to end on a test X account** (2026-08-30: 142 videos / 3.08 GB drained, playback verified), then **all data wiped** (R2, D1, KV login) to switch to the owner's real X account. Store is empty; cron runs but reports `needs_reauth` until the real account completes `/oauth/start`.
-- **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
+- **Video library UI live** (deployed 2026-08-30, version `82c1c5c3-3e6a-4a47-9f12-521023391187`; migration `0002_library.sql` applied). Grid with search/favourites/sort at `/`, watch page with title/description/favourite/delete at `/watch/:id` (spec `2026-08-30-video-library-design.md`, ADR-0011). Verified in-browser: grid, search, save, favourite, playback; delete exercised only in tests. Code is on branch `library-ui` (pushed), **not yet merged** — 52/52 tests, typecheck ok.
+- **Real X account fully backfilled (2026-08-30).** 253 bookmarks indexed (X's list exhausted, under the 800 cap): 54 no_video, 148 downloaded, ~52 failed (mostly `too_large` > 350 MB). **14.56 GB in R2** — 4.5 GB over the 10 GB free tier (≈ $0.07/mo overage); `storage` alert fired once 12:00:37 UTC. Real-account videos average ~98 MB. Cron (every 30 min, 5 downloads/tick) handles new bookmarks; `auth: ok`.
+- **v1 merged to `main`** (PR #1, 2026-08-30); work continues on short-lived branches + PRs, CI (`check`) gates them.
 
 ## Next
-0. Owner: sign in to x.com as the real account → `/oauth/start`; agent drains with `/backfill?downloads=30` (Paseo tab) and verifies playback.
-1. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`); confirm `check` is green on it (agent cannot see Actions on the private repo).
-2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
-4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
+1. Owner: open + merge PR `backfill-downloads` → `main` (PR #2; already deployed), then PR `library-ui` → `main` (base it on `backfill-downloads` until #2 merges); confirm `check` is green (agent cannot see Actions on the private repo).
+2. Owner: decide on R2 over the free tier — keep (≈ $0.07/mo) or trim with the new Delete button. Note: `status.totalBytes` does not decrease on delete (out of the v2 spec; one-line fix in the `DELETE` route if the alert/`/status` should track trimming).
+3. Agent: pull the exact `failed` breakdown from D1 (`wrangler` is logged in again) and decide with the owner whether the ~52 `too_large` posts matter (raise the cap again vs accept).
+4. Next session: delete the wrangler-sandbox line from `docs/GOTCHAS.md` (baked into `docs/runbooks/agent-setup.md` step 5 on 2026-08-30).
 
 ## Blocked
-- Nothing agent-side.
+- Nothing agent-side. (`wrangler` re-authorized 2026-08-30 via headless login + Paseo consent.)
 
-## Done recently
+## Done recently (last 5; older in JOURNAL)
+- 2026-08-30 Video library UI deployed (version `82c1c5c3`), migration `0002` applied, verified in-browser; docs/ADR-0011; 43 → 52 tests.
+- 2026-08-30 Full backfill of the real account: 7 × `/backfill?downloads=30` + confirmation; 253 indexed, 148 downloaded, 14.56 GB. Storage alert delivered.
+- 2026-08-30 Owner authorized the real X account; first cron run indexed 20 / downloaded 5 (722 MB), 0 failed.
 - 2026-08-30 GitHub Actions `check` workflow (typecheck + tests on PRs); ADR-0010 amended.
 - 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
-- 2026-08-30 Playback fixed: `Content-Range` was `bytes NaN-NaN/size` (R2 range-object shape); `FakeR2` now mirrors R2; verified `play()` in-browser.
-- 2026-08-30 `Illegal invocation` download bug fixed + regression test; branches pushed to GitHub.
-- 2026-08-30 Access switched to the Cloudflare IdP; OAuth completed; first backfill indexed 354 bookmarks into D1; download-exception logging added.
-- 2026-08-30 `TELEGRAM_CHAT_ID` secret set from `getUpdates`; test alert delivered to the owner's chat. All 4 secrets + 3 vars now in place.
-- 2026-08-30 Access enabled on the Production workers.dev route (owner); `TEAM_DOMAIN`/`POLICY_AUD` vars and `X_CLIENT_ID`/`X_CLIENT_SECRET` secrets set; redeployed; `/status` → 302 to the Access login (verified). Runbook §4/§5/§6 updated with the real dashboard path and values.
-- 2026-08-30 Final review fix wave + re-review fix: `/v/:key` 304 on If-Modified-Since, 416 only on an unsatisfiable Range (other R2 faults now propagate); `download()` refuses unknown-length bodies (ADR-0009); multi-video partial-`downloaded` rows now point `r2_key` at whichever video actually stored, not always `videos[0]`; 9 minors. `npm test` 43/43.
-- 2026-08-30 Task 9 (part): R2/KV/D1 created and bound, D1 migrated, Worker deployed twice (`PUBLIC_ORIGIN` set on 2nd), `TELEGRAM_BOT_TOKEN` secret set; `docs/runbooks/deploy.md` written; `docs/ARCHITECTURE.md` rewritten as built; `docs/GOTCHAS.md` pruned; `docs/runbooks/setup-x-developer-app.md` OAuth-2.0-vs-1.0a note added.
-- 2026-08-30 Task 8 review fixes: `/v/:key` 206-only-on-Range, 304 on If-None-Match, safe key decode; `test/index.test.ts` 5 tests.
-- 2026-08-30 Task 8: `src/html.ts` + `src/index.ts` — routes, Access gate, OAuth PKCE flow, scheduled handler; `test/index.test.ts` 4 tests.
-- 2026-08-29 Task 7 (+ 2 review-fix rounds): `src/sync.ts` — run loop, downloads, circuit breaker, alerts; `test/sync.test.ts` 12 tests.
