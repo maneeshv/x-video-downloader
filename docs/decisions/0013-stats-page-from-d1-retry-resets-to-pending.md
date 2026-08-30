@@ -1,4 +1,4 @@
-# 0012. Observability is a server-rendered `/stats` page over D1; "retry" only resets a row to pending
+# 0013. Observability is a server-rendered `/stats` page over D1; "retry" only resets a row to pending
 Date: 2026-08-30 | Status: DECIDED (owner: "build it, and add a Retry button") | Supersedes: — | Evidence: `src/store.ts` `stats()`/`retry()`, `src/sync.ts` `processItem()`
 
 ## Context

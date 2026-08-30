@@ -38,22 +38,28 @@ npx wrangler d1 execute x-downloader --remote --command "SELECT name FROM sqlite
 ```
 Expect `bookmarks`, `d1_migrations` (plus sqlite/D1 internal tables).
 
-### 3. Deploy, then set `PUBLIC_ORIGIN` and redeploy
+### 3. Deploy on the custom domain (ADR-0012)
+`wrangler.toml` carries `[[routes]] pattern = "xrender.uk", custom_domain = true` and
+`[vars] PUBLIC_ORIGIN = "https://xrender.uk"`. The zone must be active in the same Cloudflare
+account and the hostname must have no pre-existing CNAME; then:
 ```bash
-npx wrangler deploy      # prints https://x-downloader.<subdomain>.workers.dev
+npx wrangler deploy      # ends with: "xrender.uk (custom domain)" under "Deployed x-downloader triggers"
 ```
-Copy the printed URL into `wrangler.toml` `[vars] PUBLIC_ORIGIN`, then:
+Wrangler creates the DNS record and certificate itself. Because a route exists, `workers_dev` is
+inferred `false` and `https://x-downloader.x-downloader.workers.dev` returns 404 (set
+`workers_dev = true` temporarily if a cutover needs both). Verify:
 ```bash
-npx wrangler deploy
+curl -si https://xrender.uk/status | head -1   # expect: HTTP/2 302 (to the Access login); 403 before Access is attached
 ```
-Verify (Access not attached yet, so every route 403s — this is expected and safe):
-```bash
-curl -si https://x-downloader.<subdomain>.workers.dev/status | head -1   # expect: HTTP/2 403
-```
-Origin deployed 2026-08-30: `https://x-downloader.x-downloader.workers.dev`
-(the account's workers.dev subdomain is `x-downloader`, same as the Worker name — first deploy
-printed a "register a workers.dev subdomain" warning that resolved itself; DNS/TLS took ~1 minute
-to propagate before the origin answered.)
+Done 2026-08-30 (version `3fc29825-fde6-4f4e-92ab-c120497d7942`): DNS was live within seconds.
+Gotcha (hit 2026-08-30): any lookup on the deploying Mac made before wrangler created the record
+leaves a **negative A-record entry in mDNSResponder for the zone's SOA minimum = 1800 s (30 min)**;
+`dig` (asks upstream directly) answers, but `dscacheutil -q host -a name xrender.uk` shows only AAAA,
+so curl says "Could not resolve host" / hangs and Chrome (incl. the Paseo tab) lands on
+`chrome-error://chromewebdata/`. Fix: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`
+(needs a password — owner), `curl --resolve xrender.uk:443:<dig answer>`, or wait 30 min. Avoid it next
+time by not resolving the name before `wrangler deploy` finishes.
+History: 2026-08-30 08:xx–17:xx the origin was `https://x-downloader.x-downloader.workers.dev`.
 
 ### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`) — done 2026-08-30 (values in step 6)
 Edit `wrangler.toml` `[vars]` directly, then `npx wrangler deploy`. `PUBLIC_ORIGIN` is already set
@@ -79,7 +85,10 @@ Done 2026-08-30: `TELEGRAM_BOT_TOKEN`. Remaining (owner-blocked, see `docs/STATU
 
 ## Owner steps (not run 2026-08-30)
 
-### 6. Enable Cloudflare Access on the workers.dev route
+### 6. Enable Cloudflare Access on the Worker
+(Done 2026-08-30 on the workers.dev route; the app is Worker-scoped, "All traffic", so it covered
+`xrender.uk` automatically with the same AUD when the custom domain was added — verified by the
+302 in step 3. Nothing to redo for a hostname change.)
 Dashboard: **Workers & Pages → x-downloader → Domains tab** (older dashboards: **Settings → Domains &
 Routes**) → **Production** workers.dev row → the **Enable Access →** link (leave the Preview row alone) → **Manage** / the
 Worker's **Access** tab → the auto-created
@@ -101,7 +110,10 @@ selector lives in Zero Trust → Access controls → Policies if ever needed).
 
 ### 7. X app callback URL
 In console.x.com, the app's **User authentication settings** callback URL must be exactly
-`${PUBLIC_ORIGIN}/oauth/callback` — for this deploy: `https://x-downloader.x-downloader.workers.dev/oauth/callback`.
+`${PUBLIC_ORIGIN}/oauth/callback` — for this deploy: `https://xrender.uk/oauth/callback`
+(was `https://x-downloader.x-downloader.workers.dev/oauth/callback` until 2026-08-30; **owner must
+update it in console.x.com after the domain switch** — until then `/oauth/start` fails at X's consent
+screen, while the cron keeps working on the tokens already in KV).
 See `docs/runbooks/setup-x-developer-app.md` for the full app-creation steps (needs the OAuth 2.0
 Client ID/Secret, not the OAuth 1.0a keys already in `.env`).
 
