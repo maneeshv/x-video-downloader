@@ -79,4 +79,4 @@ Shared: dark theme, `system-ui`, single inline `<style>`, `<meta viewport>`. Esc
 Re-hosting thumbnails in R2; bulk actions; tags; undo / soft-delete-then-purge; removing the bookmark on X (needs `bookmark.write` scope and a re-auth); showing all videos of a multi-video post; keyboard shortcuts; pagination beyond `LIMIT 500`.
 
 ## 11. Rollout
-One branch `video-library` (stacked on `backfill-downloads`, PR #2), one PR. Deploy: `wrangler d1 migrations apply x-downloader --remote` then `wrangler deploy` (`docs/runbooks/deploy.md` gains the migration step). Docs in the same PR: ADR-0011, ARCHITECTURE (routes, schema, sync step), PRODUCT (library now in scope, non-goal line updated), STATUS/JOURNAL.
+One branch `library-ui` (from `backfill-downloads`, PR #2), one PR. Deploy: `wrangler d1 migrations apply x-downloader --remote` then `wrangler deploy` (`docs/runbooks/deploy.md` gains the migration step). Docs in the same PR: ADR-0011, ARCHITECTURE (routes, schema, sync step), PRODUCT (library now in scope, non-goal line updated), STATUS/JOURNAL.

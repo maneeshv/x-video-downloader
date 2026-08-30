@@ -22,7 +22,7 @@
 - Absolute dates everywhere (`2026-08-30`), `// ponytail:` for deliberate ceilings, no `TODO`.
 - Run tests with `npm test`, types with `npm run typecheck`. Commit after every task; the docs tasks at the end satisfy `scripts/check-session.sh` (it diffs the working tree vs HEAD, so per-task commits without JOURNAL/STATUS are fine until the final `npm run check`).
 - **Never run `wrangler` inside the sandbox** (GOTCHAS "Tooling"): use `dangerouslyDisableSandbox: true` for every wrangler call.
-- Branch: `video-library` (already created, stacked on `backfill-downloads`). Commit trailer: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- Branch: `library-ui` (created 2026-08-30 from `backfill-downloads`, so it carries the deployed backfill code). Commit trailer: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
 
 ## File structure
 
@@ -761,6 +761,6 @@ Expected: migration reports `0002_library.sql` applied; deploy prints the new ve
 - [ ] **Step 10: Push and hand off**
 
 ```bash
-git push -u origin video-library
+git push -u origin library-ui
 ```
-Tell the owner: PR `video-library` → `main` (after PR #2 `backfill-downloads` merges, or set its base to `backfill-downloads`); CI `check` must be green; migration already applied.
+Tell the owner: PR `library-ui` → `main` (after PR #2 `backfill-downloads` merges, or set its base to `backfill-downloads`); CI `check` must be green; migration already applied.
