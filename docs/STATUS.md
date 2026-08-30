@@ -1,14 +1,15 @@
 Updated: 2026-08-30
 
 ## Now
-- **v1 works end to end** (2026-08-30): `/backfill` → 5 downloaded, 0 failed, 160 MB in R2; D1 has 354 rows (198 no_video, 151 pending). Pending videos drain at 5 per cron tick (every 30 min → ~15 h), or faster by hitting `/backfill` repeatedly.
+- **v1 works end to end and the backlog is drained** (2026-08-30): 142 videos / 3.08 GB in R2; D1 354 rows = 142 downloaded + 198 no_video + 13 too_large + 1 http_403; 0 pending. Cron now only picks up new bookmarks.
 - **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
 0. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`).
 1. Owner: confirm the `check` workflow ran green on PR #1 / the push to `main` (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
-3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
+3. Owner decision pending: raise `MAX_FILE_BYTES` (200 MB) for the 13 `too_large` videos? Default keep.
+4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
 - Nothing agent-side.
