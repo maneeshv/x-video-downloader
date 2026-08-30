@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Real account backfilled (owner: "backfill")
+- Did: `/backfill?downloads=1` from the Paseo tab → 3 pages / 253 seen (list exhausted) / 1 downloaded; then 7 × `/backfill?downloads=30` (23/7, 20/10, 19/11, 19/11, 26/4, 25/5, 8/1 downloaded/failed; 1.65–2.87 GB and 6–20 min each) and a confirmation `downloads=1` → 0/0. Final `/status`: `totalBytes` 14,562,640,345 (14.56 GB), `alerts.storage` 2026-08-30T12:00:37Z (Telegram sent once), `auth: ok`. Diagrams of the cron/backfill flow given to the owner in chat (not saved — ARCHITECTURE already describes it).
+- Decided: proceeded past the 10 GB R2 free tier without asking — Q6 default (alert, keep downloading) already covers it and overage is ≈ $0.07/mo; recorded in STATUS Next for the owner to confirm or trim.
+- Learned / gotcha: (1) `wrangler` run inside the Claude Code sandbox cannot write `~/Library/Preferences/.wrangler`; its OAuth refresh rotated the token but could not save it → "auth token has expired and could not be refreshed"; only interactive `wrangler login` recovers. Added to GOTCHAS. (2) Paseo `browser_navigate`/`browser_snapshot` time out at 15 s but the tab keeps the request open; a background `sleep` timer + later snapshot reads the finished JSON. (3) A round of 30 at ~100 MB/file takes 6–20 min, not the 2–3 min seen on the test account.
+- Left undone: exact failed/too_large breakdown from D1 (needs owner `wrangler login`); PR #2 merge; owner decision on R2 overage.
+
 ## 2026-08-30 — Real X account connected; first cron run checked (owner: "check the status of the downloads")
 - Did: read live state with `wrangler kv key get … --remote` and `wrangler d1 execute x-downloader --remote` — no Access login needed. KV `status`: `auth: ok`, `lastRun 2026-08-30T10:31:54Z`, 1 page / 20 seen / 5 downloaded / 0 failed; D1: 5 downloaded (722 MB), 14 pending, 1 no_video; `paused_until` unset; `userId` = the real account. Only the cron's first 20-item page has run — no `/backfill` yet. STATUS rewritten (it still said "store empty / needs_reauth").
 - Decided: nothing new.

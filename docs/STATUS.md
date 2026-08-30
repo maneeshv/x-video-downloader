@@ -1,20 +1,22 @@
 Updated: 2026-08-30
 
 ## Now
-- **Real X account connected** (2026-08-30, `userId` in KV, `auth: ok`). First cron run 10:30 UTC: 20 bookmarks indexed (19 with video), 5 downloaded (722 MB), 14 pending, 1 no_video, 0 failed. Cron (every 30 min, 5 downloads/tick) drains the rest in ≈ 1.5 h. **No `/backfill` run yet** — only the 20 most recent bookmarks are indexed.
-- Real-account videos average ~145 MB (test account: ~22 MB). R2 free tier (10 GB) ≈ 70 such videos; `STORAGE_ALERT_BYTES` (9 GB) will trip early in a full backfill (behaviour after that: alert, keep downloading — Q6 default).
-- **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
+- **Real X account fully backfilled (2026-08-30, 10:30–12:27 UTC).** 253 bookmarks indexed (X's list exhausted, under the 800 cap): 54 no_video, ~148 downloaded, ~52 failed (mostly `too_large` > 350 MB; exact D1 counts need `wrangler login`, see Blocked). **14.56 GB in R2** — 4.5 GB over the 10 GB free tier (≈ $0.07/mo overage at $0.015/GB-month). `storage` alert fired 12:00:37 UTC (once; never re-fires unless cleared). Confirmation `/backfill?downloads=1` → 0/0.
+- Real-account videos average ~100 MB (test account ~22 MB). Cron (every 30 min, 5 downloads/tick) now handles new bookmarks; `auth: ok`.
+- **v1 merged to `main`** (PR #1, 2026-08-30). Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
-0. Owner says go → agent drains with `/backfill?downloads=30` (Paseo tab; indexes up to 800 bookmarks) and verifies playback; watch R2 size (see Now).
+0. Owner: run `wrangler login` in a terminal (token expired, see Blocked). Then agent: pull the exact `failed` breakdown from D1 and decide with the owner whether the ~52 `too_large` posts matter (raise cap again vs accept).
+0b. Owner: decide on R2 over the free tier — keep (≈ $0.07/mo) or trim; alert already fired, no further nagging.
 1. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`); confirm `check` is green on it (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
-- Nothing agent-side.
+- `wrangler` auth: token expired during a sandboxed call and could not be refreshed (GOTCHAS, Tooling). Agent cannot read KV/D1 from the CLI until the owner runs `wrangler login` interactively. `/status` and `/backfill` via the Paseo browser tab still work.
 
 ## Done recently
+- 2026-08-30 Full backfill of the real account: 7 × `/backfill?downloads=30` + confirmation; 253 indexed, ~148 downloaded, 14.56 GB. Storage alert delivered.
 - 2026-08-30 Owner authorized the real X account; first cron run indexed 20 / downloaded 5 (722 MB), 0 failed.
 - 2026-08-30 GitHub Actions `check` workflow (typecheck + tests on PRs); ADR-0010 amended.
 - 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
