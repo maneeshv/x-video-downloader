@@ -1,6 +1,33 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Video library UI (branch `library-ui`, tasks 1–6)
+- Did: Tasks 1–5 shipped the library UI: migration `0002_library.sql` (`title`, `description`,
+  `favorite`, `deleted_at`); `src/store.ts` `listDownloaded()` → `listLibrary({q, fav, sort})`,
+  plus `updateMeta`, `markDeleted`, `deleteVideos`; `src/limits.ts` `POST_ID_RE`, `TITLE_MAX`=200,
+  `DESCRIPTION_MAX`=2000, `VERSION` bumped to `"v2"`; `src/sync.ts` `processItem()` skips a
+  tombstoned row before any R2 call; `src/index.ts` gained `GET /watch/:postId`,
+  `POST`/`DELETE /api/videos/:postId`, and `/` now takes `?q=&fav=1&sort=`; `src/html.ts`
+  rewritten (`renderIndex` grid, `renderWatch` page). Test count 43 → 52. Task 6 (this entry) made
+  the docs true: ADR-0011, ARCHITECTURE (routes, D1 schema, sync step, test doubles, related
+  ADRs), PRODUCT (non-goal line replaced, library scope bullet added), deploy runbook §2
+  (migration step now names both migration files and says "run before deploy"), STATUS.
+- Decided: ADR-0011 — library metadata lives on the existing `bookmarks` row (no new table);
+  `DELETE /api/videos/:id` runs the R2 delete before the D1 tombstone, per the owner's 2026-08-30
+  choice that delete frees R2 space (over hide-only or keep-both).
+- Learned / gotcha: (a) `git cherry-pick -q` is not a valid flag; a `set -e` chain that continued
+  anyway deleted a branch before its commits were carried over — commits were recovered from their
+  SHAs. This re-trips the existing GOTCHAS/JOURNAL rule "never chain a branch delete without
+  verifying first" (see the 2026-08-30 "v1 merged to `main`" entry) — not promoting a new GOTCHAS
+  line since the rule already exists, but it clearly needs more than one restatement to stick.
+  (b) The plan's file-structure table omitted `test/smoke.test.ts` from Task 4's file list even
+  though it asserts `VERSION`; bumping the constant to `"v2"` required a one-line test update the
+  plan didn't call out.
+- Left undone: steps 8–10 of the task-6 brief — `wrangler d1 migrations apply` +
+  `wrangler deploy`, in-browser verification (grid, search, save, favourite; delete exercised only
+  in tests per the brief), `git push -u origin library-ui`, and opening PR `library-ui` → `main`
+  (base `backfill-downloads` until PR #2 merges). The controller runs these after the final review.
+
 ## 2026-08-30 — Real account backfilled (owner: "backfill")
 - Did: `/backfill?downloads=1` from the Paseo tab → 3 pages / 253 seen (list exhausted) / 1 downloaded; then 7 × `/backfill?downloads=30` (23/7, 20/10, 19/11, 19/11, 26/4, 25/5, 8/1 downloaded/failed; 1.65–2.87 GB and 6–20 min each) and a confirmation `downloads=1` → 0/0. Final `/status`: `totalBytes` 14,562,640,345 (14.56 GB), `alerts.storage` 2026-08-30T12:00:37Z (Telegram sent once), `auth: ok`. Diagrams of the cron/backfill flow given to the owner in chat (not saved — ARCHITECTURE already describes it).
 - Decided: proceeded past the 10 GB R2 free tier without asking — Q6 default (alert, keep downloading) already covers it and overage is ≈ $0.07/mo; recorded in STATUS Next for the owner to confirm or trim.
