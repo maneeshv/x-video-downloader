@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Download root cause: `deps.fetch()` → "Illegal invocation"; fixed, regression test
+- Did: with the new log line, `/backfill` showed all 5 downloads failing with `TypeError: Illegal invocation: function called with incorrect this reference`. `deps()` in `src/index.ts` stored the global `fetch` on a plain object and `sync.ts` called it as `d.fetch(url)`, so `this` was the deps object — Workers (and Node's undici) reject that. X API calls never hit it because `x.ts` invokes the passed function bare. Fix: `fetch: (input, init) => f(input, init)`. Regression test in `test/index.test.ts`: `app()` now passes a fetch that asserts `this === undefined` (failed 3× before the fix, 43/43 after). Deployed. Pushed `main` + `v1-worker` to `origin` (`github.com-personal:maneeshv/x-video-downloader`) after the owner registered the SSH key.
+- Decided: nothing new.
+- Learned / gotcha: never store `fetch` as an object property and call it as a method in Workers; wrap in an arrow or `.bind(globalThis)`. Fakes hide this — the regression test guards it now.
+- Left undone: owner to rerun `/backfill` on the fixed build and confirm `downloaded > 0`; PR to be opened by the owner (`gh` here is logged in as a different GitHub account and cannot see the private repo).
+
 ## 2026-08-30 — First real run: OAuth ok, backfill sees 354 bookmarks, 0 downloads (swallowed exception)
 - Did: owner passed Access via the Cloudflare IdP (the app's login method had to be switched from OTP; the `Cloudflare account members` policy only matches Cloudflare-IdP logins) and completed `/oauth/start`. `/status` → `auth: ok`. `/backfill` → `{pages:4, seen:354, downloaded:0, failed:5}`. D1: 198 `no_video`, 156 `has_video=1` (so `tweet.fields` + media expansion work), 151 `pending`, 5 `pending` with `error=exception`. The `catch {}` at `src/sync.ts` `processItem` dropped the message; added `console.error("download failed", key, err)` and redeployed (version `d3b4b637`). R2 docs: `customMetadata` accepts Unicode, so tweet text is not the cause.
 - Decided: nothing new.

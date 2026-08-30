@@ -1,20 +1,20 @@
 Updated: 2026-08-30
 
 ## Now
-- End-to-end auth works: Access (Cloudflare IdP, account-members policy) → `/oauth/start` → `auth: ok`. First `/backfill` saw 354 bookmarks (156 with video) but **every download attempt throws** — 5 rows `pending`/`error=exception`, message swallowed. Logging added and deployed (`d3b4b637`); waiting for the next cron or a `/backfill` rerun to read the message via `wrangler tail`.
-- `v1-worker` is code-complete and ready for a PR; remote `origin` = `github.com-personal:maneeshv/x-video-downloader` but pushes are rejected (publickey).
+- Root cause of 0 downloads found and fixed: `deps.fetch()` called the global `fetch` as a method → `Illegal invocation`. Fixed in `src/index.ts`, regression test added, deployed. Awaiting the owner's `/backfill` rerun to confirm `downloaded > 0`.
+- `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
 
 ## Next
-1. Read the download exception from the log, fix root cause, redeploy, rerun `/backfill`, confirm `downloaded > 0` and a video plays on `/`.
-2. Owner: register `~/.ssh/github_personal.pub` on the `maneeshv` GitHub account; agent pushes `main` + `v1-worker` and opens the PR.
+1. Owner: rerun `/backfill`, paste JSON; confirm a video plays on `/`. Agent: check D1/R2 counts and `wrangler tail` for any new error.
+2. Owner: open the PR `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
 3. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
-- Download exception message (needs one more run with the new log line).
-- Push/PR — SSH key for `github.com-personal` not accepted by GitHub (owner).
+- Nothing agent-side.
 
 ## Done recently
+- 2026-08-30 `Illegal invocation` download bug fixed + regression test; branches pushed to GitHub.
 - 2026-08-30 Access switched to the Cloudflare IdP; OAuth completed; first backfill indexed 354 bookmarks into D1; download-exception logging added.
 - 2026-08-30 `TELEGRAM_CHAT_ID` secret set from `getUpdates`; test alert delivered to the owner's chat. All 4 secrets + 3 vars now in place.
 - 2026-08-30 Access enabled on the Production workers.dev route (owner); `TEAM_DOMAIN`/`POLICY_AUD` vars and `X_CLIENT_ID`/`X_CLIENT_SECRET` secrets set; redeployed; `/status` → 302 to the Access login (verified). Runbook §4/§5/§6 updated with the real dashboard path and values.

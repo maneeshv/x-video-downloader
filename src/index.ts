@@ -13,7 +13,8 @@ export type AppEnv = {
 
 function deps(env: AppEnv, f: Fetch): Deps {
   return {
-    store: new Store(env.KV, env.DB, env.VIDEOS), fetch: f,
+    // Arrow wrapper: calling `deps.fetch(...)` with the global fetch as a method throws "Illegal invocation" in Workers.
+    store: new Store(env.KV, env.DB, env.VIDEOS), fetch: (input, init) => f(input, init),
     cfg: {
       clientId: env.X_CLIENT_ID, clientSecret: env.X_CLIENT_SECRET, redirectUri: `${env.PUBLIC_ORIGIN}/oauth/callback`, publicOrigin: env.PUBLIC_ORIGIN,
       telegram: env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID ? { token: env.TELEGRAM_BOT_TOKEN, chatId: env.TELEGRAM_CHAT_ID } : undefined,

@@ -21,7 +21,10 @@ async function app() {
   });
   const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
   const jwt = await signer.sign({ aud: [AUD], iss: TEAM, exp: Date.now() / 1000 + 60, email: "o@example.com" });
-  const get = (path: string, headers: Record<string, string> = {}) => handle(new Request(ORIGIN + path, { headers: { "cf-access-jwt-assertion": jwt, ...headers } }), env, f);
+  // Regression: Workers/undici throw "Illegal invocation" when fetch is called as a method of another
+  // object (`deps.fetch(url)`), so every internal caller must invoke it unbound.
+  const strict = function (this: unknown, ...args: Parameters<typeof f>) { assert.equal(this, undefined, "fetch called with a bound this"); return f(...args); };
+  const get = (path: string, headers: Record<string, string> = {}) => handle(new Request(ORIGIN + path, { headers: { "cf-access-jwt-assertion": jwt, ...headers } }), env, strict as typeof f);
   return { env, f, get, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
 }
 
