@@ -83,7 +83,7 @@ async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
   return { ok: true, bytes: len };
 }
 
-async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number }): Promise<void> {
+async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number; max: number }): Promise<void> {
   if (!it.hasVideoMedia) return d.store.upsertBookmark(row(it, "no_video", d));
   // A row with a permanent error — outright "failed", or "downloaded" partial (one video of a
   // multi-video post permanently failed) — is not retried unless the error is transient
@@ -95,7 +95,7 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   for (const v of it.videos) {
     const head = await d.store.r2.head(v.key);
     if (head) { bytes += head.size; stored++; firstStoredKey ??= v.key; continue; }
-    if (budget.downloads >= MAX_DOWNLOADS_PER_RUN) continue;
+    if (budget.downloads >= budget.max) continue;
     budget.downloads++;
     let r: Dl;
     try { r = await download(d, it, v); } catch (e) { console.error("download failed", v.key, String(e)); r = { ok: false, status: "pending", error: "exception" }; }
@@ -135,13 +135,13 @@ async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResu
   return { ...res, error: e.message };
 }
 
-export async function sync(d: Deps, o: { backfill?: boolean } = {}): Promise<SyncResult> {
+export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: number } = {}): Promise<SyncResult> {
   const res: SyncResult = { pages: 0, seen: 0, downloaded: 0, failed: 0, bytes: 0 };
   if ((await d.store.getPausedUntil()) > now(d)) return { ...res, skipped: "paused" };
 
   const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
   const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
-  const budget = { downloads: 0 };
+  const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
   let paginationToken: string | undefined, resultCount = 0, sawMedia = false;
   try {
     const access = await ensureAccessToken(d);

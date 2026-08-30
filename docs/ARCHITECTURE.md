@@ -36,7 +36,7 @@ invalid JWT → 403 before any other logic runs.
 - `GET /status` — JSON `Status` (`src/store.ts`) plus `pausedUntil`, `userId`.
 - `GET /oauth/start` — generates PKCE verifier/challenge + `state`, stores verifier in KV (`pkce:<state>`, 600s TTL), 302 to X's authorize URL (`X_SCOPES = "bookmark.read tweet.read users.read offline.access"`).
 - `GET /oauth/callback` — exchanges `code`+PKCE verifier for tokens (`exchangeCode`), stores tokens (KV `oauth`), fetches and stores the X user id (KV `userId`), clears any pause, sets `status.auth = "ok"`, 302 to `/`.
-- `GET /backfill` — `sync(deps, { backfill: true })`: up to `BACKFILL_MAX_REQUESTS=10` pages of `BACKFILL_PAGE_SIZE=90`, stops at `BACKFILL_MAX_ITEMS=800` (X only returns the 800 most recent bookmarks) or when `next_token` is absent.
+- `GET /backfill` — `sync(deps, { backfill: true })`: up to `BACKFILL_MAX_REQUESTS=10` pages of `BACKFILL_PAGE_SIZE=90`, stops at `BACKFILL_MAX_ITEMS=800` (X only returns the 800 most recent bookmarks) or when `next_token` is absent. `?downloads=N` raises the per-call download cap (default `MAX_DOWNLOADS_PER_RUN`=5, ceiling `BACKFILL_MAX_DOWNLOADS`=30) for owner-driven backlog drains.
 - Any other path or non-GET method → 404 / 405.
 
 ## `sync()` flow (`src/sync.ts`)

@@ -10,6 +10,7 @@ export const PAGE_SIZE = 20;                        // per cron run
 export const BACKFILL_PAGE_SIZE = 90;               // >90 breaks next_token — devcommunity.x.com/t/257339
 export const BACKFILL_MAX_ITEMS = 800;              // X returns at most the 800 most recent bookmarks
 export const BACKFILL_MAX_REQUESTS = 10;            // 800/90 = 9 pages
+export const BACKFILL_MAX_DOWNLOADS = 30;           // ceiling for /backfill?downloads=N (owner-driven drain, 2026-08-30); cron keeps MAX_DOWNLOADS_PER_RUN
 export const STALE_PARSER_RUNS = 30;                // consecutive runs with results but zero media → alert
 export const DOWNLOAD_JITTER_MS: readonly [number, number] = [1000, 2000];
 export const VIDEO_KEY_RE = /^\d{5,25}(-\d{1,2})?\.mp4$/;

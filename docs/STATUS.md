@@ -5,6 +5,7 @@ Updated: 2026-08-30
 - **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
+0. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`).
 1. Owner: confirm the `check` workflow ran green on PR #1 / the push to `main` (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.

@@ -1,6 +1,6 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex } from "#src/html";
-import { VIDEO_KEY_RE } from "#src/limits";
+import { BACKFILL_MAX_DOWNLOADS, MAX_DOWNLOADS_PER_RUN, VIDEO_KEY_RE } from "#src/limits";
 import { Store } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
@@ -102,7 +102,11 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     await store.patchStatus({ auth: "ok", lastError: null });
     return Response.redirect(`${env.PUBLIC_ORIGIN}/`, 302);
   }
-  if (url.pathname === "/backfill") return json(await sync(d, { backfill: true }));
+  if (url.pathname === "/backfill") {
+    // ?downloads=N lets the owner drain a backlog faster than the cron's per-run cap; clamped to a hard ceiling.
+    const n = Number(url.searchParams.get("downloads")) || MAX_DOWNLOADS_PER_RUN;
+    return json(await sync(d, { backfill: true, maxDownloads: Math.min(Math.max(1, n), BACKFILL_MAX_DOWNLOADS) }));
+  }
   return new Response("not found", { status: 404 });
 }
 

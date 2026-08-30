@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — `/backfill?downloads=N` for owner-driven backlog drains (owner: "drain now")
+- Did: `sync()` takes `maxDownloads` (default `MAX_DOWNLOADS_PER_RUN`); `/backfill?downloads=N` passes it, clamped to new `BACKFILL_MAX_DOWNLOADS = 30` in `src/limits.ts`. The cron path is unchanged (still 5). Route test asserts `?downloads=2` downloads exactly 2. 43/43, typecheck ok. Deployed from branch `backfill-downloads` (manual deploy per ADR-0010; PR to follow). Drove `/backfill?downloads=30` from the Paseo browser in a loop to drain the ~150 pending videos.
+- Decided: the cap is a constant, not an env var (ADR-0005 style); 30 keeps one call to a couple of minutes of wall time.
+- Learned / gotcha: none.
+- Left undone: owner to open/merge the PR for `backfill-downloads`.
+
 ## 2026-08-30 — v1 merged to `main` (PR #1)
 - Did: owner merged PR #1 (`v1-worker` → `main`, merge commit `8a82e93`). The one docs commit that post-dated the PR (`71a3cf9`) could not fast-forward onto the merge commit; the script deleted `v1-worker` (local + `origin`) before that was noticed, so the commit was cherry-picked onto `main` from its still-present object. Nothing lost. 43/43 tests on `main`.
 - Decided: nothing new.
