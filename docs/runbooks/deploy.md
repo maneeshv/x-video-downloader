@@ -75,8 +75,10 @@ Done 2026-08-30: `TELEGRAM_BOT_TOKEN`. Remaining (owner-blocked, see `docs/STATU
 ## Owner steps (not run 2026-08-30)
 
 ### 6. Enable Cloudflare Access on the workers.dev route
-Dashboard: **Workers & Pages → x-downloader → Settings → Domains & Routes → workers.dev route →
-Enable Cloudflare Access → Manage** → add a policy allowing the owner's email (one-time PIN login).
+Dashboard: **Workers & Pages → x-downloader → Domains tab** (older dashboards: **Settings → Domains &
+Routes**) → workers.dev route → **Enable Cloudflare Access** → **Manage Cloudflare Access** → the auto-created
+policy `x-downloader - Production` → allow only the owner's email (one-time PIN login). Sources: Cloudflare
+changelog 2025-10-03 (one-click Access), 2025-12-03 (reusable `<worker> - Production` policy), 2026-05-14 (Domains tab).
 Then **Zero Trust → Access → Applications →** the app created for this route → copy the
 **Application Audience (AUD) Tag**. The team domain is `https://<team>.cloudflareaccess.com`
 (shown in Zero Trust → Settings → Custom Pages, or the URL of the Zero Trust dashboard itself).
