@@ -25,14 +25,32 @@ async function app() {
   // object (`deps.fetch(url)`), so every internal caller must invoke it unbound.
   const strict = function (this: unknown, ...args: Parameters<typeof f>) { assert.equal(this, undefined, "fetch called with a bound this"); return f(...args); };
   const get = (path: string, headers: Record<string, string> = {}) => handle(new Request(ORIGIN + path, { headers: { "cf-access-jwt-assertion": jwt, ...headers } }), env, strict as typeof f);
-  return { env, f, get, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
+  const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
+    handle(new Request(ORIGIN + path, { ...init, headers: { "cf-access-jwt-assertion": jwt, ...(init.headers ?? {}) } }), env, strict as typeof f);
+  return { env, f, get, send, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
 }
+
+const dlRow = (post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
+  post_id, posted_at: "2026-08-01T00:00:00Z", text: "hello world", post_url: `https://x.com/i/status/${post_id}`, has_video: 1 as const,
+  status: "downloaded" as const, error: null, r2_key: `${post_id}.mp4`, bytes: 5, preview_url: "https://pbs.twimg.com/p.jpg", now: "2026-08-02T00:00:00Z", ...over,
+});
+// One downloaded two-video post in D1 + R2.
+async function seeded() {
+  const a = await app();
+  await a.store.upsertBookmark(dlRow("12345"));
+  await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
+  await a.r2.put("12345-1.mp4", new Uint8Array([1]), {});
+  return a;
+}
+const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknown, contentType = "application/json") =>
+  a.send(path, { method: "POST", headers: { "content-type": contentType }, body: JSON.stringify(body) });
 
 test("every route is 403 without a valid Access JWT", async () => {
   const { env, f } = await app();
-  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4"]) {
+  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/watch/12345", "/api/videos/12345"]) {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
+  assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
 });
 
 test("oauth start → callback stores tokens + user id, then backfill and index work", async () => {
@@ -119,4 +137,31 @@ test("html escapes text", async () => {
   const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null }], {});
   assert.doesNotMatch(out, /<script>x/);
   assert.match(out, /&lt;script&gt;/);
+});
+
+test("POST /api/videos/:id validates, then updates title/description/favorite", async () => {
+  const a = await seeded();
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T" }, "text/plain")).status, 415, "JSON content-type required (CSRF)");
+  assert.equal((await a.send("/api/videos/12345", { method: "POST", headers: { "content-type": "application/json" }, body: "{" })).status, 400, "unparsable");
+  assert.equal((await jsonPost(a, "/api/videos/12345", {})).status, 400, "no fields");
+  assert.equal((await jsonPost(a, "/api/videos/12345", { favorite: "yes" })).status, 400, "wrong type");
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "x".repeat(201) })).status, 413);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { description: "x".repeat(2001) })).status, 413);
+  assert.equal((await jsonPost(a, "/api/videos/99999", { title: "T" })).status, 404);
+  assert.equal((await jsonPost(a, "/api/videos/abc", { title: "T" })).status, 404, "non-numeric id");
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T", description: "D", favorite: true })).status, 204);
+  const b = (await a.store.getBookmark("12345"))!;
+  assert.deepEqual([b.title, b.description, b.favorite], ["T", "D", 1]);
+  assert.equal((await a.send("/api/videos/12345", { method: "PUT" })).status, 405);
+});
+
+test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is idempotent", async () => {
+  const a = await seeded();
+  assert.equal((await a.send("/api/videos/99999", { method: "DELETE" })).status, 404);
+  assert.equal((await a.send("/api/videos/12345", { method: "DELETE" })).status, 204);
+  assert.deepEqual([...a.r2.objects.keys()], [], "both sibling keys gone");
+  assert.ok((await a.store.getBookmark("12345"))!.deleted_at);
+  assert.equal((await a.send("/api/videos/12345", { method: "DELETE" })).status, 204, "repeat delete");
+  assert.equal((await a.get("/v/12345.mp4")).status, 404, "stream 404s once the object is gone");
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T" })).status, 404, "deleted rows are not editable");
 });

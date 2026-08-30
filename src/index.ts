@@ -1,7 +1,7 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, MAX_DOWNLOADS_PER_RUN, VIDEO_KEY_RE } from "#src/limits";
-import { Store } from "#src/store";
+import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { Store, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
 
@@ -67,6 +67,16 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
   return new Response(obj.body, { status: 200, headers });
 }
 
+// Body → MetaPatch, or null when it is not an object, has a wrongly-typed field, or names no field.
+function parseMetaPatch(b: unknown): MetaPatch | null {
+  if (!b || typeof b !== "object") return null;
+  const o = b as Record<string, unknown>, p: MetaPatch = {};
+  if ("title" in o) { if (typeof o.title !== "string") return null; p.title = o.title; }
+  if ("description" in o) { if (typeof o.description !== "string") return null; p.description = o.description; }
+  if ("favorite" in o) { if (typeof o.favorite !== "boolean") return null; p.favorite = o.favorite; }
+  return Object.keys(p).length ? p : null;
+}
+
 export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promise<Response> {
   const url = new URL(req.url);
   // Every route, including the OAuth callback, sits behind Access (spec §4); the JWT check defends a misconfigured policy.
@@ -76,6 +86,29 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
 
   const d = deps(env, f);
   const { store } = d;
+  const api = /^\/api\/videos\/([^/]+)$/.exec(url.pathname);
+  if (api) {
+    const id = api[1]!;
+    if (!POST_ID_RE.test(id)) return new Response("not found", { status: 404 });
+    if (req.method === "DELETE") {
+      // R2 first, tombstone second (spec §5): a tombstone must never exist for a video still in R2.
+      // A repeat delete is a 204: the row is still `downloaded`, and R2 delete ignores missing keys.
+      if ((await store.getBookmark(id))?.status !== "downloaded") return new Response("not found", { status: 404 });
+      await store.deleteVideos(id);
+      await store.markDeleted(id, new Date().toISOString());
+      return new Response(null, { status: 204 });
+    }
+    if (req.method === "POST") {
+      // JSON-only bodies: a cross-site <form> cannot set this content-type, so no CSRF token is needed.
+      if (!req.headers.get("content-type")?.startsWith("application/json")) return new Response("json only", { status: 415 });
+      const patch = parseMetaPatch(await req.json().catch(() => null));
+      if (!patch) return new Response("bad request", { status: 400 });
+      if ((patch.title?.length ?? 0) > TITLE_MAX || (patch.description?.length ?? 0) > DESCRIPTION_MAX) return new Response("too long", { status: 413 });
+      if (!(await store.updateMeta(id, patch, new Date().toISOString()))) return new Response("not found", { status: 404 });
+      return new Response(null, { status: 204 });
+    }
+    return new Response("method not allowed", { status: 405 });
+  }
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
 
   if (url.pathname === "/") return new Response(renderIndex(await store.listLibrary(), await store.getStatus()), { headers: { "content-type": "text/html; charset=utf-8" } });

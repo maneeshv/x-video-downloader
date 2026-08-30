@@ -1,5 +1,5 @@
 // Hard caps (ADR-0005). Compile-time constants on purpose: raising one is a code change + journal line.
-export const VERSION = "v1";
+export const VERSION = "v2";
 export const MAX_API_REQUESTS_PER_RUN = 3;          // documents the structural bound of one run (1 bookmarks page + ≤2 token calls + ≤2 forced-refresh calls on 401); asserted by tests, not enforced at runtime.
 export const MAX_DOWNLOADS_PER_RUN = 5;             // rest wait for the next tick (ADR-0008)
 export const MAX_FILE_BYTES = 350 * 1024 * 1024;    // spec §5 said 200 MB; owner raised to 350 MB on 2026-08-30 (13/156 test-account videos were over 200 MB) — ADR-0005 amendment
@@ -14,6 +14,9 @@ export const BACKFILL_MAX_DOWNLOADS = 30;           // ceiling for /backfill?dow
 export const STALE_PARSER_RUNS = 30;                // consecutive runs with results but zero media → alert
 export const DOWNLOAD_JITTER_MS: readonly [number, number] = [1000, 2000];
 export const VIDEO_KEY_RE = /^\d{5,25}(-\d{1,2})?\.mp4$/;
+export const POST_ID_RE = /^\d{5,25}$/;              // route :postId — same digit range as VIDEO_KEY_RE
+export const TITLE_MAX = 200;                        // library metadata caps (spec 2026-08-30 §6)
+export const DESCRIPTION_MAX = 2000;
 
 // X API v2 — docs.x.com/x-api/users/get-bookmarks, docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code
 export const X_AUTHORIZE_URL = "https://x.com/i/oauth2/authorize";
