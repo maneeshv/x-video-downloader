@@ -2,7 +2,7 @@
 
 Updated: 2026-08-30
 
-Single Cloudflare Worker, `x-downloader`, deployed to `https://x-downloader.x-downloader.workers.dev`
+Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
 (ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Live since
 2026-08-30: Access (Cloudflare identity provider, account-members policy), X OAuth 2.0 client, Telegram
 alerts all configured; proven on a test account (142 videos), store wiped, then backfilled from the

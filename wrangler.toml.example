@@ -8,10 +8,14 @@ crons = ["*/30 * * * *"]
 [observability]
 enabled = true
 
+[[routes]]
+pattern = "xrender.uk"   # Custom Domain: wrangler creates the DNS record + cert; workers.dev is implied off
+custom_domain = true
+
 [vars]
 TEAM_DOMAIN = "https://<team>.cloudflareaccess.com"   # Zero Trust team domain
 POLICY_AUD = "<aud-tag-of-the-access-application>"
-PUBLIC_ORIGIN = "https://x-downloader.<account>.workers.dev"   # exact Worker origin; the OAuth callback URL is derived from it
+PUBLIC_ORIGIN = "https://xrender.uk"   # exact Worker origin; the OAuth callback URL is derived from it
 
 [[r2_buckets]]
 binding = "VIDEOS"

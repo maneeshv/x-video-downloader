@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Custom domain `xrender.uk` replaces workers.dev (owner: "go")
+- Did: `wrangler.toml` (+ `.example`): `[[routes]] pattern = "xrender.uk", custom_domain = true`; `PUBLIC_ORIGIN = "https://xrender.uk"`. `npm run check` green (52 tests), `npx wrangler deploy` → version `3fc29825-fde6-4f4e-92ab-c120497d7942`, trigger `xrender.uk (custom domain)`; wrangler created the DNS record + cert. Verified: `curl -si https://xrender.uk/status` and `/` → `HTTP/2 302` to `orange-sky-811f.cloudflareaccess.com/…?kid=<POLICY_AUD>` (same AUD → Access already covers the new hostname); old workers.dev URL → 404. Docs: ADR-0012, deploy runbook §3/§6/§7, ARCHITECTURE header, setup-x-developer-app callback, GOTCHAS (wrangler-sandbox line deleted per STATUS item 4; sandbox-curl line added). No TypeScript touched.
+- Decided: ADR-0012 (apex Custom Domain, workers.dev off, no cutover overlap).
+- Learned / gotcha: (1) sandboxed `curl` returns the egress proxy's `502` / `200 Connection Established` for a fresh hostname — looks like a real answer, is not; verify deployed URLs unsandboxed (GOTCHAS). (2) macOS cached the NXDOMAIN from a lookup made seconds before wrangler created the record: `dig` answered, `curl` said "Could not resolve host" — `curl --resolve host:443:<ip>` sidesteps it (deploy runbook §3).
+- Left undone: **owner**: console.x.com → app → User authentication settings → callback URL = `https://xrender.uk/oauth/callback` (replace the workers.dev one), then open `https://xrender.uk/oauth/start` once and confirm `/status` shows `auth: ok`. Until then `/oauth/start` fails at X; the cron keeps working on the KV tokens.
+
 ## 2026-08-30 — Paseo worktree bootstrap copied from `mfg-agent` (owner request)
 - Did: added `.worktreeinclude` (this repo's gitignored-but-required files: `.claude/settings.local.json`, `wrangler.toml`, `worker-configuration.d.ts`, `.env*`, `.dev.vars*`), `paseo.json` (worktree setup = `npm ci && sh scripts/paseo/copy-worktree-includes.sh`), and `scripts/paseo/copy-worktree-includes.sh` verbatim from `DocketAI/.../services/mfg-agent`. Verified in a throwaway `git worktree` that the script copies `.env` and `wrangler.toml` in, then removed it.
 - Decided: nothing new (tooling only; no dependency).
