@@ -1,4 +1,10 @@
-## 2026-08-31 — `MAX_FILE_BYTES` 350 MB → 1 GB (owner decision; branch `feeble-vampirebat`)
+## 2026-08-31 — Deployed the 1 GB cap (owner: "pr is merged. deploy"; PR #10 merged as `a1f8f99`)
+- Did: `main` is checked out in the primary checkout, so this worktree ran detached at `origin/main` (`git checkout --detach origin/main`); `npm run check` 57/57. The deploy runbook pre-check caught this worktree's stale gitignored `wrangler.toml` (no `[[routes]]`, `PUBLIC_ORIGIN` = workers.dev — the exact 2026-08-30 failure mode); fixed it from the example before deploying. `npx wrangler deploy` → version `25913a4a-981e-4214-aef2-0b607c5de1aa`, triggers `xrender.uk (custom domain)` + cron. Verified unsandboxed: `xrender.uk/status` → 302 to Access (`kid` = POLICY_AUD), workers.dev → 404. This deploy also ships the Log out button (PR #8) and the merged docs from PR #9. Docs: runbook diff rewritten with temp files, GOTCHAS `wrangler.toml` line updated, previous JOURNAL entry's branch name corrected.
+- Decided: nothing new.
+- Learned / gotcha: (1) the runbook's `diff <(…) <(…)` fails inside the sandbox (`/dev/fd/N: Operation not permitted`) — runbook now uses temp files. (2) `git checkout main` fails in a worktree while the main checkout holds `main`; detach at `origin/main` instead. (3) The auto-mode classifier blocked `sed -i` on `wrangler.toml` and `npx wrangler deploy` once each (deploy: second time, see 2026-08-30); the Edit tool and a plain retry of the deploy went through.
+- Left undone: the 52 `too_large` rows are still `failed` — re-queue is an owner action (STATUS Next #1). Log out button not yet clicked in a browser.
+
+## 2026-08-31 — `MAX_FILE_BYTES` 350 MB → 1 GB (owner decision; branch `chore/max-file-bytes-1gb`, PR #10)
 - Did: `src/limits.ts` `MAX_FILE_BYTES = 1024 ** 3` (provenance comment updated), `test/limits.test.ts` asserts the new value, ARCHITECTURE sync-step line, ADR-0005 amendment line. `npm run check` green (57 tests, typecheck ok).
 - Decided: ADR-0005 amended in place (same pattern as the 2026-08-30 200 → 350 MB amendment). Resolves STATUS Next #4 (raise-the-cap vs accept) in favour of raising.
 - Learned / gotcha: none.

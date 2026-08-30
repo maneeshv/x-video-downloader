@@ -1,13 +1,16 @@
 # Deploy the Worker
-When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-08-30
+When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-08-31
 
 `wrangler.toml` is local and gitignored (copy `wrangler.toml.example`, fill in real ids). Network
 `wrangler`/`npm` calls need the Bash sandbox off (EPERM otherwise).
 
-## Before every deploy (added 2026-08-30 after a stale-config deploy)
+## Before every deploy (added 2026-08-30 after a stale-config deploy; caught a second stale copy on 2026-08-31)
 `wrangler.toml` is gitignored, so each git worktree carries its own copy — Paseo's bootstrap copies it from the main checkout, which may predate a config change merged from another worktree. On 2026-08-30 a worktree deployed with the pre-xrender.uk file: workers.dev came back on and `PUBLIC_ORIGIN` reverted (fixed by a redeploy 5 minutes later). So, first:
 ```bash
-diff <(grep -v -E '^\s*(#|$)' wrangler.toml.example | grep -v -E '^(id|database_id) =') <(grep -v -E '^\s*(#|$)' wrangler.toml | grep -v -E '^(id|database_id) =')
+# temp files, not <(…): process substitution fails inside the Claude Code sandbox (/dev/fd: Operation not permitted)
+grep -v -E '^\s*(#|$)' wrangler.toml.example | grep -v -E '^(id|database_id) =' > "$TMPDIR/a"
+grep -v -E '^\s*(#|$)' wrangler.toml         | grep -v -E '^(id|database_id) =' > "$TMPDIR/b"
+diff "$TMPDIR/a" "$TMPDIR/b"
 ```
 Expect no output apart from the real `TEAM_DOMAIN`/`POLICY_AUD` values. Any `routes`/`PUBLIC_ORIGIN`/`[vars]` difference: copy the example's lines into `wrangler.toml` before `npx wrangler deploy`. After deploying, the printed triggers must list `xrender.uk (custom domain)` — a bare workers.dev URL means the config was stale.
 
