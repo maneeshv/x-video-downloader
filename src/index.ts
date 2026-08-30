@@ -29,9 +29,11 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 // not from obj.range's presence. This also covers every R2Range shape (offset+length,
 // offset-only, suffix-only) rather than assuming the fake's/R2's default shape.
 function servedRange(obj: R2ObjectBody): { offset: number; length: number } {
-  const r = obj.range;
+  // Real R2 returns the range object with all three keys present (unused ones undefined), so
+  // test for values, never `"suffix" in r` — that produced `Content-Range: bytes NaN-NaN/size`.
+  const r = obj.range as { offset?: number; length?: number; suffix?: number } | undefined;
   if (!r) return { offset: 0, length: obj.size };
-  if ("suffix" in r) return { offset: obj.size - r.suffix, length: r.suffix };
+  if (r.suffix != null) return { offset: obj.size - r.suffix, length: r.suffix };
   const offset = r.offset ?? 0;
   return { offset, length: r.length ?? obj.size - offset };
 }

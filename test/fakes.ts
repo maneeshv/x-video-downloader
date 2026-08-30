@@ -78,7 +78,8 @@ export class FakeR2 {
       size: o.bytes.byteLength,
       httpEtag,
       // real R2 always reports the served range, {0, size} for a plain GET — not just on Range requests.
-      range: { offset: start, length: end - start },
+      // Real R2 returns all three keys, unused ones undefined — code must not use `"suffix" in range`.
+      range: { offset: start, length: end - start, suffix: undefined } as R2Range,
       writeHttpMetadata: (h: Headers) => {
         h.set("content-type", o.contentType);
       },

@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Playback bug: `Content-Range: bytes NaN-NaN/size`; fixed, fake made honest
+- Did: owner reported Play does nothing while Download works. Logged into the app through the Paseo browser (Access via the Cloudflare IdP — needs the account that owns the Worker) and probed `/v/:key` with `Range` headers: 206 with `content-range: bytes NaN-NaN/410244`; `video.error` = code 4 "Format error". Cause: `servedRange()` used `"suffix" in obj.range`; real R2 returns the range object with all three keys present (unused ones `undefined`), so the suffix branch ran and computed `size - undefined`. Fix: test values (`r.suffix != null`) not key presence. `FakeR2` now returns `{offset, length, suffix: undefined}` like R2 — with that fake the old code fails the existing Range test (`bytes NaN-NaN/5`); 43/43 after. Deployed (`8aa0d9c6`) and verified in-browser: correct `Content-Range` for `0-1`, `0-`, `1000-`, and `play()` advanced to 4.0 s / 10.75 s with no error.
+- Decided: nothing new.
+- Learned / gotcha: R2's `R2Object.range` carries every key of the `R2Range` union with `undefined` for the unused ones; `"key" in obj` discriminators are wrong for R2 objects. Fakes must mirror that shape or tests pass while production 206s are garbage.
+- Left undone: owner to confirm playback in their own browser; PR still to be opened by the owner.
+
 ## 2026-08-30 — Download root cause: `deps.fetch()` → "Illegal invocation"; fixed, regression test
 - Did: with the new log line, `/backfill` showed all 5 downloads failing with `TypeError: Illegal invocation: function called with incorrect this reference`. `deps()` in `src/index.ts` stored the global `fetch` on a plain object and `sync.ts` called it as `d.fetch(url)`, so `this` was the deps object — Workers (and Node's undici) reject that. X API calls never hit it because `x.ts` invokes the passed function bare. Fix: `fetch: (input, init) => f(input, init)`. Regression test in `test/index.test.ts`: `app()` now passes a fetch that asserts `this === undefined` (failed 3× before the fix, 43/43 after). Deployed. Pushed `main` + `v1-worker` to `origin` (`github.com-personal:maneeshv/x-video-downloader`) after the owner registered the SSH key.
 - Decided: nothing new.
