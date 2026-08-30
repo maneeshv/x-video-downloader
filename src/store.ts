@@ -14,6 +14,14 @@ export type Status = {
   totalBytes?: number; noMediaRuns?: number; alerts?: Record<string, string>;
 };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
+export type LibraryQuery = { q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title" };
+// A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
+export type MetaPatch = { title?: string; description?: string; favorite?: boolean };
+const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
+  newest: "posted_at DESC, post_id DESC",
+  oldest: "posted_at ASC, post_id ASC",
+  title: "COALESCE(title, text) COLLATE NOCASE ASC, post_id DESC",
+};
 
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
 const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, preview_url, updated_at)
@@ -70,11 +78,38 @@ export class Store {
   getBookmark(postId: string): Promise<BookmarkRow | null> {
     return this.db.prepare("SELECT * FROM bookmarks WHERE post_id = ?").bind(postId).first<BookmarkRow>();
   }
-  async listDownloaded(limit = 500): Promise<BookmarkRow[]> {
+  // ponytail: LIKE over ≤800 rows (X's bookmark ceiling, ADR-0007); FTS5 if it ever gets slow.
+  async listLibrary({ q, fav, sort = "newest" }: LibraryQuery = {}, limit = 500): Promise<BookmarkRow[]> {
+    const where = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
+    if (fav) where.push("favorite = 1");
+    if (q) { where.push("(title LIKE ? OR description LIKE ? OR text LIKE ?)"); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
     const { results } = await this.db
-      .prepare("SELECT * FROM bookmarks WHERE status = 'downloaded' ORDER BY first_seen_at DESC, post_id DESC LIMIT ?")
-      .bind(limit).all<BookmarkRow>();
+      .prepare(`SELECT * FROM bookmarks WHERE ${where.join(" AND ")} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ?`)
+      .bind(...args, limit).all<BookmarkRow>();
     return results;
+  }
+  async updateMeta(postId: string, p: MetaPatch, now: string): Promise<boolean> {
+    const sets: string[] = [], args: unknown[] = [];
+    if (p.title !== undefined) { sets.push("title = ?"); args.push(p.title || null); }
+    if (p.description !== undefined) { sets.push("description = ?"); args.push(p.description || null); }
+    if (p.favorite !== undefined) { sets.push("favorite = ?"); args.push(p.favorite ? 1 : 0); }
+    sets.push("updated_at = ?"); args.push(now);
+    const r = await this.db
+      .prepare(`UPDATE bookmarks SET ${sets.join(", ")} WHERE post_id = ? AND status = 'downloaded' AND deleted_at IS NULL`)
+      .bind(...args, postId).run();
+    return r.meta.changes > 0;
+  }
+  // Tombstone (ADR-0011): sync() skips the row forever, even though its key is gone from R2.
+  async markDeleted(postId: string, now: string): Promise<boolean> {
+    const r = await this.db
+      .prepare("UPDATE bookmarks SET deleted_at = COALESCE(deleted_at, ?), updated_at = ? WHERE post_id = ? AND status = 'downloaded'")
+      .bind(now, now, postId).run();
+    return r.meta.changes > 0;
+  }
+  // ponytail: X allows ≤4 media per post (key scheme in src/x.ts) and R2 ignores missing keys,
+  // so name the sibling keys instead of paying a list() call.
+  deleteVideos(postId: string): Promise<void> {
+    return this.r2.delete([`${postId}.mp4`, ...[1, 2, 3, 4].map((n) => `${postId}-${n}.mp4`)]);
   }
 
   async has(key: string): Promise<boolean> { return (await this.r2.head(key)) !== null; }

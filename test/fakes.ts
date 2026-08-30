@@ -61,6 +61,9 @@ export class FakeR2 {
     this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "", uploaded: new Date("2026-08-01T00:00:00Z") });
     return { key, size: bytes.byteLength };
   }
+  async delete(keys: string | string[]) {
+    for (const k of [keys].flat()) this.objects.delete(k);
+  }
   async get(key: string, opts: { range?: Headers; onlyIf?: Headers } = {}) {
     // ponytail: magic key for the "generic R2 fault must propagate" test — real R2 can throw for
     // reasons other than an unsatisfiable Range (network fault, internal error).

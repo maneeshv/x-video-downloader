@@ -78,7 +78,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   const { store } = d;
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
 
-  if (url.pathname === "/") return new Response(renderIndex(await store.listDownloaded(), await store.getStatus()), { headers: { "content-type": "text/html; charset=utf-8" } });
+  if (url.pathname === "/") return new Response(renderIndex(await store.listLibrary(), await store.getStatus()), { headers: { "content-type": "text/html; charset=utf-8" } });
   if (url.pathname.startsWith("/v/")) {
     let key: string;
     try { key = decodeURIComponent(url.pathname.slice(3)); }

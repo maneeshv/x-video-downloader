@@ -59,7 +59,7 @@ test("download cap leaves the rest pending; next run picks them up", async () =>
   assert.equal((await w.store.getBookmark("200000000000000006"))?.status, "pending");
   const r2 = await sync(w.d);
   assert.equal(r2.downloaded, 2);
-  assert.equal((await w.store.listDownloaded()).length, 7);
+  assert.equal((await w.store.listLibrary()).length, 7);
 });
 
 test("paused → skipped without any API call", async () => {
@@ -151,7 +151,7 @@ test("multi-video post with one permanently failed video: the stored sibling is 
   const row = await w.store.getBookmark("1000000000000000004");
   assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-1.mp4"]);
   assert.deepEqual([...w.r2.objects.keys()], ["1000000000000000004-1.mp4"]);
-  assert.ok((await w.store.listDownloaded()).some((x) => x.post_id === "1000000000000000004"), "listDownloaded includes the partial row");
+  assert.ok((await w.store.listLibrary()).some((x) => x.post_id === "1000000000000000004"), "listLibrary includes the partial row");
 
   const videoCalls = () => w.f.calls.filter(([u]) => u.includes("4a.mp4") || u.includes("4b.mp4")).length;
   const before = videoCalls();
