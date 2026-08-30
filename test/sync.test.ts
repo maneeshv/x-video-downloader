@@ -251,3 +251,19 @@ test("backfill paginates with max_results=90 until no next_token", async () => {
   assert.equal(new URL(w.f.calls[0][0]).searchParams.get("max_results"), "90");
   assert.equal(new URL(w.f.calls.filter(([u]) => u.includes("/bookmarks"))[1][0]).searchParams.get("pagination_token"), "abc");
 });
+
+test("a deleted post is never re-downloaded even though its key is gone from R2 (ADR-0011)", async () => {
+  const w = world(routes(fx())); await authed(w.store);
+  await sync(w.d);
+  const id = "1000000000000000001";
+  await w.store.deleteVideos(id);
+  await w.store.markDeleted(id, "2026-08-30T00:00:00Z");
+  const before = w.f.calls.filter(([u]) => u.includes("video.twimg")).length;
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 0);
+  assert.equal(w.f.calls.filter(([u]) => u.includes("video.twimg")).length, before, "no download attempted");
+  assert.equal(w.r2.objects.has(`${id}.mp4`), false);
+  const b = (await w.store.getBookmark(id))!;
+  assert.equal(b.deleted_at, "2026-08-30T00:00:00Z");
+  assert.equal(b.status, "downloaded", "row untouched by the rerun");
+});
