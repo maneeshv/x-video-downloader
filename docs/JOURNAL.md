@@ -2,7 +2,7 @@
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
 ## 2026-08-30 — `/backfill?downloads=N` for owner-driven backlog drains (owner: "drain now")
-- Did: `sync()` takes `maxDownloads` (default `MAX_DOWNLOADS_PER_RUN`); `/backfill?downloads=N` passes it, clamped to new `BACKFILL_MAX_DOWNLOADS = 30` in `src/limits.ts`. The cron path is unchanged (still 5). Route test asserts `?downloads=2` downloads exactly 2. 43/43, typecheck ok. Deployed from branch `backfill-downloads` (manual deploy per ADR-0010; PR to follow). Drove `/backfill?downloads=30` from the Paseo browser in a loop to drain the ~150 pending videos.
+- Did: `sync()` takes `maxDownloads` (default `MAX_DOWNLOADS_PER_RUN`); `/backfill?downloads=N` passes it, clamped to new `BACKFILL_MAX_DOWNLOADS = 30` in `src/limits.ts`. The cron path is unchanged (still 5). Route test asserts `?downloads=2` downloads exactly 2. 43/43, typecheck ok. Deployed from branch `backfill-downloads` (manual deploy per ADR-0010; PR to follow). Drove `/backfill?downloads=30` from the Paseo browser in a loop: 6 rounds (27/26/27/29/27/0 downloads, ~150–175 s each), 16 min total → **142 downloaded, 3.08 GB in R2, 0 pending**; terminal: 13 `too_large` (>200 MB cap), 1 `http_403`. R2 usage 3.1 GB of the 10 GB free tier; `STORAGE_ALERT_BYTES` (9 GB) not near.
 - Decided: the cap is a constant, not an env var (ADR-0005 style); 30 keeps one call to a couple of minutes of wall time.
 - Learned / gotcha: none.
 - Left undone: owner to open/merge the PR for `backfill-downloads`.
