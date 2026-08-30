@@ -15,7 +15,6 @@ Curated, topic-grouped facts a future session could re-trip on. Not a log: JOURN
 - 2026-08-29: The `cloudflare-docs` MCP (no auth) is a valid source for hard rule 5 alongside Context7. Baked into: `CLAUDE.md` rule 5.
 
 ## Tooling (Claude Code on this repo)
-- 2026-08-30 Never run `wrangler` inside the Claude Code Bash sandbox: `~/Library/Preferences/.wrangler` is read-only there, so when wrangler rotates its OAuth token it cannot save the new one → next call fails with "auth token has expired and could not be refreshed" and only an interactive `wrangler login` recovers. Use `dangerouslyDisableSandbox` for every wrangler call. Baked into: `docs/runbooks/agent-setup.md` step 5 (confirmed twice 2026-08-30) — delete this line next session.
 - 2026-08-30: `node --test` shares one module graph per test FILE, so module-level caches (e.g. the JWKS cache in src/access.ts) persist across test() blocks — use distinct cache keys (random `kid`/team domain) per test. Baked into: test/index.test.ts, test/access.test.ts.
 - 2026-08-30 Workers `fetch` throws `Illegal invocation` when called as a method of another object (`deps.fetch(url)`); wrap it in an arrow. Baked into: `src/index.ts` `deps()` comment + `test/index.test.ts` bound-`this` assertion — delete this line once you trust the test.
 - 2026-08-30 `R2Object.range` has all of `offset`/`length`/`suffix` as keys (unused = `undefined`); never discriminate with `"suffix" in r`. Baked into: `src/index.ts` `servedRange()` comment + `FakeR2` shape in `test/fakes.ts`.

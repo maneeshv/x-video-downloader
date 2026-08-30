@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — `/stats` observability page + Retry (owner: "I need some observability on it")
+- Did: owner could not see pending/downloaded/failed counts or which posts they were. Added `Store.stats()` (one GROUP BY over `bookmarks`), `Store.listByStatus()`, `Store.retry()`; `GET /stats` (`renderStats`: tiles, health table, failures-by-reason, pending + failed post lists, "Run backfill now" link); `POST /api/videos/:id/retry` (failed → pending, JSON-only like the other POST); "Stats" link in the library header. TDD: store tests (2) and route tests (2) written and seen red first. 52 → 56 tests, typecheck ok. Rendered a sample page to a throwaway HTML file and screenshotted it (Playwright) — layout clean. Docs: ADR-0012, ARCHITECTURE routes + related ADRs, STATUS; deleted the wrangler-sandbox GOTCHAS line (baked into `docs/runbooks/agent-setup.md` step 5, as STATUS Next #4 asked).
+- Decided: ADR-0012 — stats come from D1 (not KV `totalBytes`), retry is a row reset that the existing sync loop honours, no immediate re-download, no charts (no time series exists).
+- Learned / gotcha: the Claude Code sandbox blocks `bind()` on a listening socket (`python3 -m http.server` → `Operation not permitted`) and Playwright MCP blocks `file:` URLs, so previewing generated HTML needs the server started with the sandbox disabled. Tooling-only; not promoted to GOTCHAS unless it re-trips.
+- Left undone: not deployed (ADR-0010: owner approves deploys); no D1 migration needed. Owner: open PR for this branch; PRs #2 and `library-ui` are still ahead of it in the merge order.
+
 ## 2026-08-30 — Paseo worktree bootstrap copied from `mfg-agent` (owner request)
 - Did: added `.worktreeinclude` (this repo's gitignored-but-required files: `.claude/settings.local.json`, `wrangler.toml`, `worker-configuration.d.ts`, `.env*`, `.dev.vars*`), `paseo.json` (worktree setup = `npm ci && sh scripts/paseo/copy-worktree-includes.sh`), and `scripts/paseo/copy-worktree-includes.sh` verbatim from `DocketAI/.../services/mfg-agent`. Verified in a throwaway `git worktree` that the script copies `.env` and `wrangler.toml` in, then removed it.
 - Decided: nothing new (tooling only; no dependency).
