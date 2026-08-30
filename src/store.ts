@@ -13,6 +13,8 @@ export type Status = {
   lastRun?: string; lastError?: string | null; auth?: "ok" | "needs_reauth"; counts?: Record<string, number>;
   totalBytes?: number; noMediaRuns?: number; alerts?: Record<string, string>;
 };
+// One row per (status, error, deleted) group; `bytes` sums the group's stored bytes.
+export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
 export type LibraryQuery = { q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title" };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
@@ -87,6 +89,22 @@ export class Store {
       .prepare(`SELECT * FROM bookmarks WHERE ${where.join(" AND ")} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ?`)
       .bind(...args, limit).all<BookmarkRow>();
     return results;
+  }
+  stats(): Promise<StatRow[]> {
+    return this.db
+      .prepare("SELECT status, error, deleted_at IS NOT NULL AS deleted, COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS bytes FROM bookmarks GROUP BY 1, 2, 3")
+      .all<StatRow>().then((r) => r.results);
+  }
+  async listByStatus(statuses: BookmarkStatus[], limit = 500): Promise<BookmarkRow[]> {
+    const { results } = await this.db
+      .prepare(`SELECT * FROM bookmarks WHERE status IN (${statuses.map(() => "?").join(",")}) ORDER BY updated_at DESC, post_id DESC LIMIT ?`)
+      .bind(...statuses, limit).all<BookmarkRow>();
+    return results;
+  }
+  // failed → pending: sync() re-attempts pending rows the next time it sees the post (src/sync.ts processItem).
+  async retry(postId: string, now: string): Promise<boolean> {
+    const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE post_id = ? AND status = 'failed'").bind(now, postId).run();
+    return r.meta.changes > 0;
   }
   async updateMeta(postId: string, p: MetaPatch, now: string): Promise<boolean> {
     const sets: string[] = [], args: unknown[] = [];
