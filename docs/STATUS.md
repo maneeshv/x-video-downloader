@@ -2,10 +2,10 @@ Updated: 2026-08-30
 
 ## Now
 - **v1 works end to end** (2026-08-30): `/backfill` → 5 downloaded, 0 failed, 160 MB in R2; D1 has 354 rows (198 no_video, 151 pending). Pending videos drain at 5 per cron tick (every 30 min → ~15 h), or faster by hitting `/backfill` repeatedly.
-- `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
+- **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
-1. Owner: open the PR (this also triggers the first CI run — confirm it is green) `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
+1. Owner: confirm the `check` workflow ran green on PR #1 / the push to `main` (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 

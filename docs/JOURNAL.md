@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — v1 merged to `main` (PR #1)
+- Did: owner merged PR #1 (`v1-worker` → `main`, merge commit `8a82e93`). Fast-forwarded `main` with the one docs commit that post-dated the PR (`71a3cf9`), deleted `v1-worker` locally and on `origin`. 43/43 tests on `main`.
+- Decided: nothing new.
+- Learned / gotcha: none.
+- Left undone: owner to confirm CI green; backlog still draining via cron (150 pending at merge time).
+
 ## 2026-08-30 — CI: tests + typecheck on PRs (owner: "add CI")
 - Did: `.github/workflows/check.yml` — checkout@v7, setup-node@v7 (Node 24, npm cache), `npm ci`, `npm run typecheck`, `npm test`; triggers on `pull_request` and push to `main`. Runs the two scripts directly rather than `npm run check`, because `scripts/check-session.sh` reasons about the local working tree, not a PR. ADR-0010 amended: CI checks, deploy still manual. README's deploy line already says manual.
 - Decided: ADR-0010 amendment.
