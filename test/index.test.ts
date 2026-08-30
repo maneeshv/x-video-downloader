@@ -49,9 +49,11 @@ test("oauth start → callback stores tokens + user id, then backfill and index 
   assert.equal(cb.status, 302);
   assert.equal((await a.store.getTokens())?.access, "A");
   assert.equal(await a.store.getUserId(), "u1");
+  const bf2 = await a.get("/backfill?downloads=2");
+  assert.equal(((await bf2.json()) as { downloaded: number }).downloaded, 2, "?downloads=N caps the run");
   const bf = await a.get("/backfill");
   assert.equal(bf.status, 200);
-  assert.equal(((await bf.json()) as { downloaded: number }).downloaded, 4);
+  assert.equal(((await bf.json()) as { downloaded: number }).downloaded, 2, "remaining two on the default run");
   const idx = await a.get("/");
   assert.equal(idx.status, 200);
   const html = await idx.text();
