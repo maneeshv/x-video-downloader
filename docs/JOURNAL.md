@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Docs sweep (owner: "is everything up to date?")
+- Did: grep for stale claims found five: ARCHITECTURE "deployed but dormant" paragraph, a leftover "owner's email (OTP)" line in deploy.md §6, setup-x-developer-app "not yet executed", PRODUCT header "design phase", duplicate numbering in STATUS. Fixed all. Wrote `docs/runbooks/reset-store.md` (today's wipe/switch procedure) and pointed the GOTCHAS line at it. Moved the 200 MB cap decision into `docs/QUESTIONS.md` with default = keep.
+- Decided: nothing new.
+- Learned / gotcha: none.
+- Left undone: same three owner items (real-account `/oauth/start`, PR #2 merge/CI, cap question).
+
 ## 2026-08-30 — Wiped all test-account data; switching to the owner's real X account
 - Did: owner revealed the authorized X account was a test account. Wiped: R2 (710 idempotent `wrangler r2 object delete` calls covering `<id>.mp4` and `<id>-1..4.mp4` for every downloaded row; spot-check confirms gone), D1 (`DELETE FROM bookmarks`, 0 rows), KV (`oauth`, `status`, `userId` deleted). Paused the cron via `paused_until` during the wipe so a post bookmarked by both accounts couldn't be skipped-then-deleted; pause lifted after R2 was confirmed clear. Worker, secrets, Access, and the X developer app are untouched — only the OAuth user changes.
 - Decided: same X developer app for the real account (API usage keeps billing to the test account's developer-console credits; owner can move it later).

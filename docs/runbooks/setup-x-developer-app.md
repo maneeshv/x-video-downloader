@@ -1,5 +1,5 @@
 # Set up the X developer app (pay-per-use)
-When: once, before first deploy; again only if the app is deleted | Last verified: 2026-08-29 (from docs, not yet executed)
+When: once, before first deploy; again only if the app is deleted | Last verified: 2026-08-30 (executed by the owner; OAuth 2.0 flow worked end to end)
 
 ## Steps
 1. Go to https://console.x.com and sign in with the X account whose bookmarks will be archived. Accept the Developer Agreement.

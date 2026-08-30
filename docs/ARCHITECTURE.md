@@ -3,8 +3,10 @@
 Updated: 2026-08-30
 
 Single Cloudflare Worker, `x-downloader`, deployed to `https://x-downloader.x-downloader.workers.dev`
-(ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Deployed but
-dormant as of 2026-08-30: no Access policy, no X OAuth client, no chat id (`docs/STATUS.md`).
+(ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Live since
+2026-08-30: Access (Cloudflare identity provider, account-members policy), X OAuth 2.0 client, Telegram
+alerts all configured; proven on a test account (142 videos), store wiped, awaiting the owner's real
+account (`docs/STATUS.md`). Deploys are manual `wrangler deploy`; CI runs typecheck + tests (ADR-0010).
 
 ## Runtime
 - `[triggers] crons = ["*/30 * * * *"]` — `scheduled()` calls `sync(deps, {})` (cron mode: 1 page, `PAGE_SIZE=20`).
