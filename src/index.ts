@@ -1,5 +1,5 @@
 import { verifyAccessJwt } from "#src/access";
-import { renderIndex, renderWatch } from "#src/html";
+import { renderIndex, renderStats, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
@@ -87,10 +87,16 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
 
   const d = deps(env, f);
   const { store } = d;
-  const api = /^\/api\/videos\/([^/]+)$/.exec(url.pathname);
+  const api = /^\/api\/videos\/([^/]+)(\/retry)?$/.exec(url.pathname);
   if (api) {
     const id = api[1]!;
     if (!POST_ID_RE.test(id)) return new Response("not found", { status: 404 });
+    if (api[2]) {
+      // failed → pending; the next sync that sees the post re-attempts it (cron scans only the newest page, /backfill scans all).
+      if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+      if (!req.headers.get("content-type")?.startsWith("application/json")) return new Response("json only", { status: 415 });
+      return new Response(null, { status: (await store.retry(id, new Date().toISOString())) ? 204 : 404 });
+    }
     if (req.method === "DELETE") {
       // ponytail: a cron tick between deleteVideos and markDeleted can re-download the object under the tombstone; a repeat DELETE (row is still 'downloaded') cleans it up.
       // R2 first, tombstone second (spec §5): a tombstone must never exist for a video still in R2.
@@ -130,6 +136,9 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     try { key = decodeURIComponent(url.pathname.slice(3)); }
     catch { return new Response("not found", { status: 404 }); }
     return video(store, key, req);
+  }
+  if (url.pathname === "/stats") {
+    return html(renderStats(await store.stats(), await store.listByStatus(["pending", "failed"]), await store.getStatus(), await store.getPausedUntil()));
   }
   if (url.pathname === "/status") return json({ ...(await store.getStatus()), pausedUntil: await store.getPausedUntil(), userId: await store.getUserId() });
   if (url.pathname === "/oauth/start") {

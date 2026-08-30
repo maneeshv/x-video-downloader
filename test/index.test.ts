@@ -47,7 +47,7 @@ const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknow
 
 test("every route is 403 without a valid Access JWT", async () => {
   const { env, f } = await app();
-  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/watch/12345", "/api/videos/12345"]) {
+  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/watch/12345", "/api/videos/12345", "/stats"]) {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
   assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
@@ -208,9 +208,45 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.equal((await a.get("/watch/12345")).status, 404, "deleted");
 });
 
-test("library and watch pages link to the Access logout URL", async () => {
+test("library, watch and stats pages link to the Access logout URL", async () => {
   const { renderIndex, renderWatch } = await import("#src/html");
   const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
   assert.match(renderIndex([row], {}), /href="\/cdn-cgi\/access\/logout"/);
   assert.match(renderWatch(row), /href="\/cdn-cgi\/access\/logout"/);
+  assert.match((await (await (await seeded()).get("/stats")).text()), /href="\/cdn-cgi\/access\/logout"/);
+});
+
+test("/stats shows counts, failures by reason, and the pending/failed posts; / links to it", async () => {
+  const a = await seeded();
+  await a.store.upsertBookmark(dlRow("12346", { bytes: 7 }));
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null, text: "<b>big</b> one" }));
+  await a.store.upsertBookmark(dlRow("22223", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
+  await a.store.upsertBookmark(dlRow("33333", { status: "pending", r2_key: null, bytes: null }));
+  await a.store.upsertBookmark(dlRow("44444", { status: "no_video", has_video: 0, r2_key: null, bytes: null }));
+  await a.send("/api/videos/12346", { method: "DELETE" });
+  await a.store.patchStatus({ lastRun: "2026-08-30T12:00:00Z", auth: "ok", alerts: { storage: "2026-08-30T12:00:37Z" }, counts: { seen: 20, downloaded: 5, failed: 0, pages: 1 } });
+  const res = await a.get("/stats");
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  for (const needle of [
+    'data-stat="downloaded">1<', 'data-stat="pending">1<', 'data-stat="failed">2<', 'data-stat="no_video">1<', 'data-stat="deleted">1<',
+    'data-stat="bytes">5 B<', "too_large</td><td>2", "&lt;b&gt;big&lt;/b&gt; one", "2026-08-30T12:00:00Z", "storage", "seen 20",
+    'href="https://x.com/i/status/33333"', 'data-retry="22222"', 'href="/backfill',
+  ]) assert.ok(body.includes(needle), needle);
+  assert.ok(!body.includes("<b>big</b>"), "text is escaped");
+  assert.ok((await (await a.get("/")).text()).includes('href="/stats"'), "library header links to /stats");
+});
+
+test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; json only", async () => {
+  const a = await seeded();
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
+  assert.equal((await a.send("/api/videos/22222/retry", { method: "POST" })).status, 415, "no content-type");
+  assert.equal((await jsonPost(a, "/api/videos/22222/retry", {})).status, 204);
+  const b = (await a.store.getBookmark("22222"))!;
+  assert.deepEqual([b.status, b.error], ["pending", null]);
+  assert.equal((await jsonPost(a, "/api/videos/22222/retry", {})).status, 404, "already pending");
+  assert.equal((await jsonPost(a, "/api/videos/12345/retry", {})).status, 404, "downloaded");
+  assert.equal((await jsonPost(a, "/api/videos/99999/retry", {})).status, 404, "unknown");
+  assert.equal((await jsonPost(a, "/api/videos/bad!/retry", {})).status, 404, "bad id");
+  assert.equal((await a.send("/api/videos/22222/retry", { method: "GET" })).status, 405);
 });

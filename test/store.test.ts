@@ -120,3 +120,33 @@ test("markDeleted is idempotent and keeps the first timestamp; deleteVideos remo
   await s.deleteVideos("1");
   assert.deepEqual([...r2.objects.keys()], ["10.mp4"], "another post whose id shares the prefix survives");
 });
+
+test("stats groups rows by status, error and deleted; listByStatus is newest-updated first", async () => {
+  const { s } = mk();
+  await dl(s, "1", { bytes: 100 });
+  await dl(s, "2", { bytes: 50 });
+  await s.upsertBookmark(row({ post_id: "3", status: "failed", error: "too_large", now: "2026-08-03T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "4", status: "failed", error: "too_large", now: "2026-08-04T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "5", status: "failed", error: "http_403", now: "2026-08-05T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "6", status: "pending", now: "2026-08-06T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "7", status: "no_video", has_video: 0 }));
+  await s.markDeleted("2", "2026-08-30T00:00:00Z");
+  const st = (await s.stats()).map((r) => [r.status, r.error, r.deleted, r.n, r.bytes]);
+  assert.deepEqual(st.sort(), [
+    ["downloaded", null, 0, 1, 100], ["downloaded", null, 1, 1, 50], ["failed", "http_403", 0, 1, 0],
+    ["failed", "too_large", 0, 2, 0], ["no_video", null, 0, 1, 0], ["pending", null, 0, 1, 0],
+  ].sort());
+  assert.deepEqual((await s.listByStatus(["pending", "failed"])).map((r) => r.post_id), ["6", "5", "4", "3"]);
+});
+
+test("retry resets a failed row to pending and clears its error; other rows untouched", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row({ post_id: "1", status: "failed", error: "too_large" }));
+  await dl(s, "2");
+  assert.ok(await s.retry("1", "2026-08-30T00:00:00Z"));
+  const b = (await s.getBookmark("1"))!;
+  assert.deepEqual([b.status, b.error, b.updated_at], ["pending", null, "2026-08-30T00:00:00Z"]);
+  assert.equal(await s.retry("1", "2026-08-30T00:00:01Z"), false, "already pending");
+  assert.equal(await s.retry("2", "2026-08-30T00:00:01Z"), false, "downloaded rows are not retried");
+  assert.equal(await s.retry("9", "2026-08-30T00:00:01Z"), false, "unknown id");
+});

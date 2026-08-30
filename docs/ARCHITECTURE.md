@@ -2,7 +2,7 @@
 
 Updated: 2026-08-30
 
-Single Cloudflare Worker, `x-downloader`, deployed to `https://x-downloader.x-downloader.workers.dev`
+Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
 (ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Live since
 2026-08-30: Access (Cloudflare identity provider, account-members policy), X OAuth 2.0 client, Telegram
 alerts all configured; proven on a test account (142 videos), store wiped, then backfilled from the
@@ -35,12 +35,14 @@ are set; alerts silently no-op otherwise).
 Every route (including `/oauth/callback`) requires header `cf-access-jwt-assertion`, verified by
 `verifyAccessJwt` (`src/access.ts`, ADR-0004) against `TEAM_DOMAIN`/`POLICY_AUD` — missing or
 invalid JWT → 403 before any other logic runs.
-Both HTML pages carry a "Log out" link to `/cdn-cgi/access/logout`; Cloudflare answers that path at the edge (clears the Access cookie for this hostname and revokes the session across all Access apps — there is no per-app logout), so it never reaches the Worker and has no route here. Source: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ (read 2026-08-30).
+All HTML pages (`/`, `/watch/:id`, `/stats`) carry a "Log out" link to `/cdn-cgi/access/logout`; Cloudflare answers that path at the edge (clears the Access cookie for this hostname and revokes the session across all Access apps — there is no per-app logout), so it never reaches the Worker and has no route here. Source: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ (read 2026-08-30).
 - `GET /?q=&fav=1&sort=newest|oldest|title` — `renderIndex()` (`src/html.ts`) over `store.listLibrary({q, fav, sort})` (≤500 rows, `status='downloaded' AND deleted_at IS NULL`, `LIKE` over title/description/text, unknown `sort` falls back to `newest`) + `store.getStatus()`.
 - `GET /watch/:postId` — `renderWatch()` over `store.getBookmark(postId)`. `postId` must match `POST_ID_RE` (`src/limits.ts`); 404 unless the row is `status='downloaded'`, `deleted_at` unset, and `r2_key` set.
 - `POST /api/videos/:postId` — body JSON `{title?, description?, favorite?}`. 415 unless `content-type` starts with `application/json` (no CSRF token needed: a cross-site `<form>` cannot set this header); 400 on an unparsable body, a body naming no known field, or a wrongly-typed field; 413 when `title` exceeds `TITLE_MAX`=200 or `description` exceeds `DESCRIPTION_MAX`=2000; 404 when `store.updateMeta` matches no `downloaded`, non-deleted row; 204 on success.
 - `DELETE /api/videos/:postId` — 404 unless the row is `status='downloaded'`; otherwise `store.deleteVideos(postId)` (R2 delete of `<id>.mp4` and `<id>-1..4.mp4`) then `store.markDeleted(postId, now)`, in that order (ADR-0011: no tombstone for a video still in R2), then 204. Idempotent: a repeat delete on an already-`downloaded` row (R2 delete of an already-missing key is a no-op) still 204s.
 - `GET /v/:key` — streams a video from R2. `key` must match `VIDEO_KEY_RE` (`src/limits.ts`) or 404. Supports `Range` (206 + `Content-Range`, via `servedRange()` which normalizes all three `R2Range` shapes) and conditional revalidation: 304 when the request carried If-None-Match or If-Modified-Since and R2 dropped the body; 412 otherwise; 416 only when the request carried a Range header and R2 rejected it (any other `getVideo` throw propagates instead of being reported as a client-facing 416). Malformed `%`-escapes in the key 404 instead of throwing. A deleted video's key is simply gone from R2, so this 404s naturally.
+- `GET /stats` — `renderStats()` (`src/html.ts`, ADR-0013) over `store.stats()` (one `GROUP BY status, error, deleted_at IS NOT NULL` aggregate with `COUNT(*)` and `SUM(bytes)`), `store.listByStatus(["pending","failed"])` (≤500 rows, `updated_at DESC`), `store.getStatus()` and `store.getPausedUntil()`. Tiles (downloaded / pending / failed / no video / deleted / stored bytes — all from D1, so "Stored" tracks deletes unlike KV `totalBytes`), health table (last run, auth, last error, pause, last-run counts, active alerts), failures by `error`, and the pending + failed post lists with a Retry button per failed row and a "Run backfill now" link to `/backfill?downloads=30`.
+- `POST /api/videos/:postId/retry` — 415 unless `content-type` starts with `application/json` (same CSRF reasoning as `POST /api/videos/:postId`); `store.retry(postId, now)` sets `status='pending', error=NULL` on a `failed` row → 204, or 404 when the row is not `failed`. Nothing is downloaded in the request: `processItem()` re-attempts the row the next time a sync sees the post (cron = newest page only; `/backfill` = everything). Any other method → 405.
 - `GET /status` — JSON `Status` (`src/store.ts`) plus `pausedUntil`, `userId`.
 - `GET /oauth/start` — generates PKCE verifier/challenge + `state`, stores verifier in KV (`pkce:<state>`, 600s TTL), 302 to X's authorize URL (`X_SCOPES = "bookmark.read tweet.read users.read offline.access"`).
 - `GET /oauth/callback` — exchanges `code`+PKCE verifier for tokens (`exchangeCode`), stores tokens (KV `oauth`), fetches and stores the X user id (KV `userId`), clears any pause, sets `status.auth = "ok"`, 302 to `/`.
@@ -90,4 +92,4 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
 --test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
 0009 (refuse unknown-length video bodies instead of buffering), 0011 (library metadata in D1;
-delete tombstone overrides the R2 ledger).
+delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending).

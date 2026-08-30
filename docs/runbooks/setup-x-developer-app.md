@@ -7,7 +7,7 @@ When: once, before first deploy; again only if the app is deleted | Last verifie
 3. In the default pay-per-use project, create an App. Under **User authentication settings**:
    - Type: **Web App, Automated App or Bot** (confidential client).
    - App permissions: Read.
-   - Callback URL: `https://<worker-name>.<account>.workers.dev/oauth/callback` (exact match; add the custom-domain variant too if one is used later). For this deploy: `https://x-downloader.x-downloader.workers.dev/oauth/callback`.
+   - Callback URL: `${PUBLIC_ORIGIN}/oauth/callback` (exact match). For this deploy: `https://xrender.uk/oauth/callback` (ADR-0012; was `https://x-downloader.x-downloader.workers.dev/oauth/callback` before 2026-08-30 — replace, do not keep both).
    - Website URL: the same Worker origin.
 4. Save the **Client ID** and **Client Secret** somewhere private (password manager). They go into the Worker via:
    ```
