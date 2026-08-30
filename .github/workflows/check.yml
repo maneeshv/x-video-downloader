@@ -14,5 +14,7 @@ jobs:
           node-version: 24   # node --test runs .ts via type stripping (ADR-0006); 24 = current LTS
           cache: npm
       - run: npm ci
+      # worker-configuration.d.ts is generated, not committed; wrangler only parses *.toml, so copy the example first.
+      - run: cp wrangler.toml.example wrangler.toml && npx wrangler types
       - run: npm run typecheck
       - run: npm test
