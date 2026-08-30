@@ -2,7 +2,7 @@
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
 ## 2026-08-30 — Owner asked how to get X OAuth 2.0 creds + enable Access
-- Did: answered from `docs/runbooks/setup-x-developer-app.md` + `deploy.md` §6; verified the Cloudflare side against docs and corrected the dashboard path (Access toggle now lives in the Worker's **Domains** tab, changelog 2026-05-14).
+- Did: answered from `docs/runbooks/setup-x-developer-app.md` + `deploy.md` §6; verified the Cloudflare side against docs and corrected the dashboard path (Access toggle now lives in the Worker's **Domains** tab as an **Enable Access →** link per URL row, plus an **Access** tab; changelog 2026-05-14 — confirmed from the owner's screenshot).
 - Decided: nothing new.
 - Learned / gotcha: Cloudflare auto-creates a reusable Access policy named `<worker> - Production` when you enable Access on workers.dev; edit that, do not create a second app.
 - Left undone: owner still owes `X_CLIENT_ID`/`X_CLIENT_SECRET`, `TEAM_DOMAIN`/`POLICY_AUD`, `TELEGRAM_CHAT_ID`.
