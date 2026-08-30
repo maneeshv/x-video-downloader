@@ -1,20 +1,27 @@
-Updated: 2026-08-29
+Updated: 2026-08-30
 
 ## Now
-- Executing `docs/superpowers/plans/2026-08-29-v1-worker.md` (spec APPROVED 2026-08-29), Tasks 1–8, TDD, subagent-driven. Product code is now allowed.
+- **v1 works end to end** (2026-08-30): `/backfill` → 5 downloaded, 0 failed, 160 MB in R2; D1 has 354 rows (198 no_video, 151 pending). Pending videos drain at 5 per cron tick (every 30 min → ~15 h), or faster by hitting `/backfill` repeatedly.
+- `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
 
 ## Next
-1. Task 9 of the plan: create R2/KV/D1, migrate, deploy, enable Access, secrets, X callback URL, `/oauth/start`, one `/backfill`.
-2. Runbook `docs/runbooks/deploy.md`; rewrite `docs/ARCHITECTURE.md` as built; prune `docs/GOTCHAS.md`; `Last verified` on runbooks.
-3. Observe the first week: cron events, console.x.com usage (Owned-Reads rate?), Error 1102 on downloads → Workers Paid.
-4. v2 (owner intent): list/search/filter UI over the `bookmarks` table.
+1. Owner: open the PR (this also triggers the first CI run — confirm it is green) `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
+2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
+3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
-- Task 9 needs from the owner: (a) **OAuth 2.0 Client ID + Client Secret** from the X app's *User authentication settings* (the `.env` keys are OAuth 1.0a consumer key/secret + app-only bearer, which cannot read bookmarks) — add them to `.env` as `X_CLIENT_ID` / `X_CLIENT_SECRET`; (b) **`TELEGRAM_CHAT_ID`** — message the bot once, then the agent reads it via `getUpdates`.
-- Enabling Cloudflare Access on the workers.dev route is a dashboard click (owner, or agent via the authenticated Cloudflare MCP once `/mcp` is authorized).
+- Nothing agent-side.
 
 ## Done recently
-- 2026-08-29 Spec approved; plan written (9 tasks); ADR-0006 amended (`#src/*` imports).
-- 2026-08-29 `docs/GOTCHAS.md`, `docs/runbooks/agent-setup.md`, CLAUDE.md rule 7, ADR-0007 (D1 index), ADR-0008 (single Worker).
-- 2026-08-29 Owner decided official X API (ADRs 0002–0006); X API v2 research; runbooks for X app setup and re-auth.
-- 2026-08-29 Repo scaffold, docs-as-memory system, five-persona brainstorm, initial spec.
+- 2026-08-30 GitHub Actions `check` workflow (typecheck + tests on PRs); ADR-0010 amended.
+- 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
+- 2026-08-30 Playback fixed: `Content-Range` was `bytes NaN-NaN/size` (R2 range-object shape); `FakeR2` now mirrors R2; verified `play()` in-browser.
+- 2026-08-30 `Illegal invocation` download bug fixed + regression test; branches pushed to GitHub.
+- 2026-08-30 Access switched to the Cloudflare IdP; OAuth completed; first backfill indexed 354 bookmarks into D1; download-exception logging added.
+- 2026-08-30 `TELEGRAM_CHAT_ID` secret set from `getUpdates`; test alert delivered to the owner's chat. All 4 secrets + 3 vars now in place.
+- 2026-08-30 Access enabled on the Production workers.dev route (owner); `TEAM_DOMAIN`/`POLICY_AUD` vars and `X_CLIENT_ID`/`X_CLIENT_SECRET` secrets set; redeployed; `/status` → 302 to the Access login (verified). Runbook §4/§5/§6 updated with the real dashboard path and values.
+- 2026-08-30 Final review fix wave + re-review fix: `/v/:key` 304 on If-Modified-Since, 416 only on an unsatisfiable Range (other R2 faults now propagate); `download()` refuses unknown-length bodies (ADR-0009); multi-video partial-`downloaded` rows now point `r2_key` at whichever video actually stored, not always `videos[0]`; 9 minors. `npm test` 43/43.
+- 2026-08-30 Task 9 (part): R2/KV/D1 created and bound, D1 migrated, Worker deployed twice (`PUBLIC_ORIGIN` set on 2nd), `TELEGRAM_BOT_TOKEN` secret set; `docs/runbooks/deploy.md` written; `docs/ARCHITECTURE.md` rewritten as built; `docs/GOTCHAS.md` pruned; `docs/runbooks/setup-x-developer-app.md` OAuth-2.0-vs-1.0a note added.
+- 2026-08-30 Task 8 review fixes: `/v/:key` 206-only-on-Range, 304 on If-None-Match, safe key decode; `test/index.test.ts` 5 tests.
+- 2026-08-30 Task 8: `src/html.ts` + `src/index.ts` — routes, Access gate, OAuth PKCE flow, scheduled handler; `test/index.test.ts` 4 tests.
+- 2026-08-29 Task 7 (+ 2 review-fix rounds): `src/sync.ts` — run loop, downloads, circuit breaker, alerts; `test/sync.test.ts` 12 tests.

@@ -1,0 +1,19 @@
+{
+  "name": "x-downloader",
+  "private": true,
+  "type": "module",
+  "imports": { "#src/*": "./src/*.ts" },
+  "scripts": {
+    "test": "node --no-warnings --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "types": "wrangler types",
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "check": "npm run typecheck && npm test && scripts/check-session.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^25.0.0",
+    "wrangler": "^4.127.0"
+  }
+}

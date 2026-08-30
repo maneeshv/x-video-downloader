@@ -1,5 +1,5 @@
 # 0006. TypeScript + wrangler, no web framework, `node --test` for tests
-Date: 2026-08-29 | Status: DECIDED (owner accepted default); amended 2026-08-29 — absolute imports are implemented with package.json `imports` (`#src/*` → `./src/*.ts`), not `tsconfig` `paths`, because `node --test` runs the TS natively and only resolves subpath imports; esbuild (wrangler) resolves them too | Supersedes: — | Evidence: docs/research/2026-08-29-persona-lazy-skeptic.md
+Date: 2026-08-29 | Status: DECIDED (owner accepted default); amended 2026-08-29 — absolute imports are implemented with package.json `imports` (`#src/*` → `./src/*.ts`), not `tsconfig` `paths`, because `node --test` runs the TS natively and only resolves subpath imports; esbuild (wrangler) resolves them too; amended 2026-08-29 — dev-only type packages (@types/node) are allowed without a new ADR, scoped to the test project only (tsconfig.test.json), never src/ which runs on workerd | Supersedes: — | Evidence: docs/research/2026-08-29-persona-lazy-skeptic.md
 
 ## Context
 Cloudflare Workers' first-class toolchain is TypeScript with `wrangler`. The Worker has four routes and one cron handler; a router framework (Hono etc.) would add a dependency for a `switch` statement. Agent-written code benefits most from flat, boring files with every magic value in one place.

@@ -1,5 +1,5 @@
 # 0005. Hard caps and a circuit breaker are constants in code, not configuration
-Date: 2026-08-29 | Status: DECIDED (owner accepted default) | Supersedes: — | Evidence: docs/research/2026-08-29-persona-security.md
+Date: 2026-08-29 | Status: DECIDED (owner accepted default) | Supersedes: — | Evidence: docs/research/2026-08-29-persona-security.md ; amended 2026-08-30 — the storage constant is named STORAGE_ALERT_BYTES in code (spec §5), not MAX_TOTAL_BYTES
 
 ## Context
 All code here is written by an agent iterating without a human in the loop. A bug that loops on the X API or downloads without bound turns into an API bill, a storage bill, or a rate-limit lock. Cloudflare budget alerts are informational only.
