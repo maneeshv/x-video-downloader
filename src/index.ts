@@ -1,7 +1,7 @@
 import { verifyAccessJwt } from "#src/access";
-import { renderIndex } from "#src/html";
+import { renderIndex, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
-import { Store, type MetaPatch } from "#src/store";
+import { Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
 
@@ -23,6 +23,7 @@ function deps(env: AppEnv, f: Fetch): Deps {
 }
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+const html = (s: string) => new Response(s, { headers: { "content-type": "text/html; charset=utf-8" } });
 
 // R2 (and miniflare) populate obj.range unconditionally on a GET — even a plain request
 // gets {offset: 0, length: size} back — so whether to answer 206 must come from the request,
@@ -111,7 +112,18 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   }
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
 
-  if (url.pathname === "/") return new Response(renderIndex(await store.listLibrary(), await store.getStatus()), { headers: { "content-type": "text/html; charset=utf-8" } });
+  if (url.pathname === "/") {
+    const sort = url.searchParams.get("sort");
+    const q: LibraryQuery = { q: url.searchParams.get("q")?.trim() || undefined, fav: url.searchParams.get("fav") === "1", sort: sort === "oldest" || sort === "title" ? sort : "newest" };
+    return html(renderIndex(await store.listLibrary(q), await store.getStatus(), q));
+  }
+  const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
+  if (watch) {
+    if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
+    const b = await store.getBookmark(watch[1]!);
+    if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
+    return html(renderWatch(b));
+  }
   if (url.pathname.startsWith("/v/")) {
     let key: string;
     try { key = decodeURIComponent(url.pathname.slice(3)); }

@@ -75,7 +75,7 @@ test("oauth start → callback stores tokens + user id, then backfill and index 
   const idx = await a.get("/");
   assert.equal(idx.status, 200);
   const html = await idx.text();
-  assert.match(html, /\/v\/1000000000000000001\.mp4/);
+  assert.match(html, /\/watch\/1000000000000000001"/);
   assert.match(html, /two videos/);
   assert.doesNotMatch(html, /photo only/, "non-video bookmarks are not listed in v1");
   const st = await a.get("/status");
@@ -164,4 +164,46 @@ test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is id
   assert.equal((await a.send("/api/videos/12345", { method: "DELETE" })).status, 204, "repeat delete");
   assert.equal((await a.get("/v/12345.mp4")).status, 404, "stream 404s once the object is gone");
   assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T" })).status, 404, "deleted rows are not editable");
+});
+
+test("/ renders the grid and honours q, fav, sort; deleted videos leave it", async () => {
+  const a = await seeded();
+  await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z" }));
+  await a.store.updateMeta("12346", { title: "Aardvark", favorite: true }, "2026-08-30T00:00:00Z");
+  const html = async (p: string) => { const r = await a.get(p); assert.equal(r.status, 200, p); return r.text(); };
+  let h = await html("/");
+  assert.match(h, /href="\/watch\/12345"/);
+  assert.match(h, /Aardvark/, "title shown");
+  assert.match(h, /hello world/, "text fallback shown when no title");
+  assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "poster hotlinked");
+  assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
+  h = await html("/?sort=oldest");
+  assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
+  h = await html("/?q=zebra");
+  assert.match(h, /\/watch\/12346"/); assert.doesNotMatch(h, /\/watch\/12345"/);
+  assert.match(h, /value="zebra"/, "search box keeps the query");
+  h = await html("/?fav=1");
+  assert.match(h, /\/watch\/12346"/); assert.doesNotMatch(h, /\/watch\/12345"/);
+  h = await html("/?q=nothing-matches");
+  assert.match(h, /No videos match/);
+  await a.send("/api/videos/12346", { method: "DELETE" });
+  assert.doesNotMatch(await html("/"), /\/watch\/12346"/, "deleted videos leave the grid");
+});
+
+test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async () => {
+  const a = await seeded();
+  await a.store.updateMeta("12345", { title: "My <title>", description: "desc" }, "2026-08-30T00:00:00Z");
+  const r = await a.get("/watch/12345");
+  assert.equal(r.status, 200);
+  const h = await r.text();
+  assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
+  assert.match(h, /value="My &lt;title&gt;"/, "escaped");
+  assert.match(h, />desc<\/textarea>/);
+  assert.match(h, /\/api\/videos\//, "mutation script present");
+  await a.store.upsertBookmark(dlRow("12347", { status: "pending", r2_key: null }));
+  assert.equal((await a.get("/watch/12347")).status, 404, "pending");
+  assert.equal((await a.get("/watch/99999")).status, 404, "unknown");
+  assert.equal((await a.get("/watch/abc")).status, 404, "bad id");
+  await a.send("/api/videos/12345", { method: "DELETE" });
+  assert.equal((await a.get("/watch/12345")).status, 404, "deleted");
 });
