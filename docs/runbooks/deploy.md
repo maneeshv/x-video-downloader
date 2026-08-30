@@ -52,9 +52,13 @@ inferred `false` and `https://x-downloader.x-downloader.workers.dev` returns 404
 curl -si https://xrender.uk/status | head -1   # expect: HTTP/2 302 (to the Access login); 403 before Access is attached
 ```
 Done 2026-08-30 (version `3fc29825-fde6-4f4e-92ab-c120497d7942`): DNS was live within seconds.
-Gotcha: curl on the deploying Mac may say "Could not resolve host" for a minute or two (negative
-DNS cache from a lookup made before the record existed) even though `dig +short xrender.uk` answers —
-use `curl --resolve xrender.uk:443:<dig answer>` or wait.
+Gotcha (hit 2026-08-30): any lookup on the deploying Mac made before wrangler created the record
+leaves a **negative A-record entry in mDNSResponder for the zone's SOA minimum = 1800 s (30 min)**;
+`dig` (asks upstream directly) answers, but `dscacheutil -q host -a name xrender.uk` shows only AAAA,
+so curl says "Could not resolve host" / hangs and Chrome (incl. the Paseo tab) lands on
+`chrome-error://chromewebdata/`. Fix: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`
+(needs a password — owner), `curl --resolve xrender.uk:443:<dig answer>`, or wait 30 min. Avoid it next
+time by not resolving the name before `wrangler deploy` finishes.
 History: 2026-08-30 08:xx–17:xx the origin was `https://x-downloader.x-downloader.workers.dev`.
 
 ### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`) — done 2026-08-30 (values in step 6)
