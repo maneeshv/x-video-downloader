@@ -1,11 +1,12 @@
 Updated: 2026-08-30
 
 ## Now
-- **v1 proven end to end on a test X account** (2026-08-30: 142 videos / 3.08 GB drained, playback verified), then **all data wiped** (R2, D1, KV login) to switch to the owner's real X account. Store is empty; cron runs but reports `needs_reauth` until the real account completes `/oauth/start`.
+- **Real X account connected** (2026-08-30, `userId` in KV, `auth: ok`). First cron run 10:30 UTC: 20 bookmarks indexed (19 with video), 5 downloaded (722 MB), 14 pending, 1 no_video, 0 failed. Cron (every 30 min, 5 downloads/tick) drains the rest in ≈ 1.5 h. **No `/backfill` run yet** — only the 20 most recent bookmarks are indexed.
+- Real-account videos average ~145 MB (test account: ~22 MB). R2 free tier (10 GB) ≈ 70 such videos; `STORAGE_ALERT_BYTES` (9 GB) will trip early in a full backfill (behaviour after that: alert, keep downloading — Q6 default).
 - **v1 merged to `main`** (PR #1, 2026-08-30). Branch `v1-worker` deleted. Work continues on short-lived branches + PRs; CI (`check`) gates them.
 
 ## Next
-0. Owner: sign in to x.com as the real account → `/oauth/start`; agent drains with `/backfill?downloads=30` (Paseo tab) and verifies playback.
+0. Owner says go → agent drains with `/backfill?downloads=30` (Paseo tab; indexes up to 800 bookmarks) and verifies playback; watch R2 size (see Now).
 1. Owner: open + merge PR `backfill-downloads` → `main` (already deployed; code = `/backfill?downloads=N`); confirm `check` is green on it (agent cannot see Actions on the private repo).
 2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
 4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
@@ -14,6 +15,7 @@ Updated: 2026-08-30
 - Nothing agent-side.
 
 ## Done recently
+- 2026-08-30 Owner authorized the real X account; first cron run indexed 20 / downloaded 5 (722 MB), 0 failed.
 - 2026-08-30 GitHub Actions `check` workflow (typecheck + tests on PRs); ADR-0010 amended.
 - 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
 - 2026-08-30 Playback fixed: `Content-Range` was `bytes NaN-NaN/size` (R2 range-object shape); `FakeR2` now mirrors R2; verified `play()` in-browser.

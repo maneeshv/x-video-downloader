@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Real X account connected; first cron run checked (owner: "check the status of the downloads")
+- Did: read live state with `wrangler kv key get … --remote` and `wrangler d1 execute x-downloader --remote` — no Access login needed. KV `status`: `auth: ok`, `lastRun 2026-08-30T10:31:54Z`, 1 page / 20 seen / 5 downloaded / 0 failed; D1: 5 downloaded (722 MB), 14 pending, 1 no_video; `paused_until` unset; `userId` = the real account. Only the cron's first 20-item page has run — no `/backfill` yet. STATUS rewritten (it still said "store empty / needs_reauth").
+- Decided: nothing new.
+- Learned / gotcha: real-account videos average ~145 MB (test account ~22 MB); 10 GB R2 free tier ≈ 70 videos, so the 9 GB alert will fire early in a full backfill. Not a re-trip fact — recorded in STATUS, not GOTCHAS.
+- Left undone: `/backfill?downloads=30` drain (owner to say go); PR #2 merge.
+
 ## 2026-08-30 — `MAX_FILE_BYTES` 200 → 350 MB (owner decision)
 - Did: constant, its test, ARCHITECTURE, ADR-0005 amendment note; QUESTIONS entry resolved and removed. Store was already empty, so no `too_large` rows needed resetting. Deployed.
 - Decided: ADR-0005 amended (350 MB).
