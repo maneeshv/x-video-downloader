@@ -4,7 +4,7 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
 ## 2026-08-30 — `MAX_FILE_BYTES` 200 → 350 MB (owner decision)
 - Did: constant, its test, ARCHITECTURE, ADR-0005 amendment note; QUESTIONS entry resolved and removed. Store was already empty, so no `too_large` rows needed resetting. Deployed.
 - Decided: ADR-0005 amended (350 MB).
-- Learned / gotcha: none.
+- Learned / gotcha: `test/sync.test.ts` hard-coded a 300 MB "too large" body, so the raise broke it — and my script deployed before checking the test result. Test now uses `MAX_FILE_BYTES + 1`; gate deploys on `npm run check` exit status, not on eyeballing output.
 - Left undone: real-account `/oauth/start`; PR #2 merge.
 
 ## 2026-08-30 — Docs sweep (owner: "is everything up to date?")

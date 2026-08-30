@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "#src/store";
 import { sync, type Deps } from "#src/sync";
-import { MAX_DOWNLOADS_PER_RUN } from "#src/limits";
+import { MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES } from "#src/limits";
 import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, type Scripted } from "./fakes.ts";
 
 const fx = () => fixture("bookmarks.json");
@@ -114,7 +114,7 @@ test("429 pauses until x-rate-limit-reset and alerts; 403 pauses 24h", async () 
 
 test("video too large → failed/too_large, nothing stored; 5xx → pending/http_503", async () => {
   const b = fx(); b.data = b.data.slice(0, 2); b.meta.result_count = 2;
-  const w = world(routes(b, (url) => (url.includes("1_high") ? { status: 200, bodyBytes: new Uint8Array(1), headers: { "content-length": String(300 * 1024 * 1024) } } : { status: 503 })));
+  const w = world(routes(b, (url) => (url.includes("1_high") ? { status: 200, bodyBytes: new Uint8Array(1), headers: { "content-length": String(MAX_FILE_BYTES + 1) } } : { status: 503 })));
   await authed(w.store);
   const r = await sync(w.d);
   assert.equal(r.downloaded, 0); assert.equal(r.failed, 2); assert.equal(w.r2.objects.size, 0);
