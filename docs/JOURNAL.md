@@ -11,6 +11,7 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
 - Did: `.github/workflows/check.yml` — checkout@v7, setup-node@v7 (Node 24, npm cache), `npm ci`, `npm run typecheck`, `npm test`; triggers on `pull_request` and push to `main`. Runs the two scripts directly rather than `npm run check`, because `scripts/check-session.sh` reasons about the local working tree, not a PR. ADR-0010 amended: CI checks, deploy still manual. README's deploy line already says manual.
 - Decided: ADR-0010 amendment.
 - Learned / gotcha: none.
+- Also (owner: "remove"): deleted the unused OAuth 1.0a keys `X_CONSUMER_KEY`/`X_SECRET_KEY`/`X_BEARER_TOKEN` from the local `.env`; added `TELEGRAM_CHAT_ID` to it so `.env` matches `.env.example` (it had only ever been pushed straight from `getUpdates`).
 - Left undone: first workflow run happens when the PR is opened — the agent's `gh` is on a different GitHub account and cannot read Actions for the private repo; owner confirms the green check.
 
 ## 2026-08-30 — Owner asked how deploys work, whether README is current, and about `.env.example`
