@@ -24,11 +24,9 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
   (b) The plan's file-structure table omitted `test/smoke.test.ts` from Task 4's file list even
   though it asserts `VERSION`; bumping the constant to `"v2"` required a one-line test update the
   plan didn't call out.
-- Left undone: steps 8–10 of the task-6 brief — `wrangler d1 migrations apply` +
-  `wrangler deploy`, in-browser verification (grid, search, save, favourite; delete exercised only
-  in tests per the brief), `git push -u origin library-ui`, and opening PR `library-ui` → `main`
-  (base `backfill-downloads` until PR #2 merges). The controller runs these after the final review.
-
+- Deployed (same day, owner: "Wrangler deploy approved"): wrangler OAuth token had expired (the sandbox gotcha, second confirmation) — recovered with `npx wrangler login --browser=false` in the background and the consent form completed in the Paseo browser tab (account `x-video-downloader-project` only). `wrangler d1 migrations apply --remote` → `0002_library.sql` ✅ (148 downloaded rows); `wrangler deploy` → version `82c1c5c3-3e6a-4a47-9f12-521023391187`. Verified in-browser through Access: grid 148 cards / 148 posters loaded / `no-referrer` meta; `?q=free` 3, no-match 0; `POST` 204 → favourites filter 0→1, title search 1, watch page shows the title; `text/plain` → 415; `?sort=title` ok; `<video>` played (readyState 4, 20 s of 1105 s); ★ toggled through the real page handler and persisted. Verification metadata reverted. Delete exercised only in tests. Branch pushed.
+- Learned / gotcha (c): the wrangler-sandbox token failure is now confirmed twice → baked into `docs/runbooks/agent-setup.md` step 5 (with the headless-login recovery); GOTCHAS line marked for deletion next session. Also: Paseo `browser_click` on an inactive tab drops clicks silently; `browser_evaluate` with `element.click()` is reliable.
+- Left undone: owner opens PR `library-ui` → `main` (after PR #2 `backfill-downloads`); CI green check. Follow-ups noted in STATUS (totalBytes never decreases on delete; `too_large` breakdown).
 ## 2026-08-30 — Real account backfilled (owner: "backfill")
 - Did: `/backfill?downloads=1` from the Paseo tab → 3 pages / 253 seen (list exhausted) / 1 downloaded; then 7 × `/backfill?downloads=30` (23/7, 20/10, 19/11, 19/11, 26/4, 25/5, 8/1 downloaded/failed; 1.65–2.87 GB and 6–20 min each) and a confirmation `downloads=1` → 0/0. Final `/status`: `totalBytes` 14,562,640,345 (14.56 GB), `alerts.storage` 2026-08-30T12:00:37Z (Telegram sent once), `auth: ok`. Diagrams of the cron/backfill flow given to the owner in chat (not saved — ARCHITECTURE already describes it).
 - Decided: proceeded past the 10 GB R2 free tier without asking — Q6 default (alert, keep downloading) already covers it and overage is ≈ $0.07/mo; recorded in STATUS Next for the owner to confirm or trim.
