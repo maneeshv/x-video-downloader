@@ -5,15 +5,15 @@ Updated: 2026-08-30
 - `main` and `v1-worker` are pushed to `origin` (`maneeshv/x-video-downloader`, private). PR not yet opened — the local `gh` login is a different GitHub account.
 
 ## Next
-1. Owner: confirm a video plays on `/` in their own browser (agent verified in the Paseo browser after the `Content-Range` fix, 2026-08-30).
-2. Owner: open the PR `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
-3. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
-4. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
+1. Owner: open the PR `v1-worker → main` at https://github.com/maneeshv/x-video-downloader/compare/main...v1-worker (or `gh auth login` as `maneeshv` and the agent does it).
+2. Verify the cron keeps advancing `lastRun` (`docs/runbooks/deploy.md` step 10).
+3. v2 (owner intent): list/search/filter UI over the `bookmarks` D1 table.
 
 ## Blocked
 - Nothing agent-side.
 
 ## Done recently
+- 2026-08-30 Owner confirmed playback. ADR-0010 (manual deploy, no CI), README rewritten for v1, `.env.example` added.
 - 2026-08-30 Playback fixed: `Content-Range` was `bytes NaN-NaN/size` (R2 range-object shape); `FakeR2` now mirrors R2; verified `play()` in-browser.
 - 2026-08-30 `Illegal invocation` download bug fixed + regression test; branches pushed to GitHub.
 - 2026-08-30 Access switched to the Cloudflare IdP; OAuth completed; first backfill indexed 354 bookmarks into D1; download-exception logging added.

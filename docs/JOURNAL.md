@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-30 — Owner asked how deploys work, whether README is current, and about `.env.example`
+- Did: playback confirmed by the owner. Answered: deploys are manual `wrangler deploy` from a logged-in laptop, no CI — that was undocumented, so ADR-0010. README still said "design phase"; rewritten (status, runbooks, dev commands, secrets/config files). Added `.env.example` (the 4 keys the Worker needs, with the OAuth-2.0-not-1.0a warning) and `!.env.example` in `.gitignore` (`.env*` was swallowing it). Noted `.env` still carries `X_CONSUMER_KEY`/`X_SECRET_KEY`/`X_BEARER_TOKEN`, which nothing reads.
+- Decided: ADR-0010 (manual deploy, revisit on second deployer / untested deploy / drift).
+- Learned / gotcha: `.env*` in `.gitignore` also ignores `.env.example`; needs an explicit `!` line.
+- Left undone: PR still to be opened by the owner; backlog drain choice.
+
 ## 2026-08-30 — Playback bug: `Content-Range: bytes NaN-NaN/size`; fixed, fake made honest
 - Did: owner reported Play does nothing while Download works. Logged into the app through the Paseo browser (Access via the Cloudflare IdP — needs the account that owns the Worker) and probed `/v/:key` with `Range` headers: 206 with `content-range: bytes NaN-NaN/410244`; `video.error` = code 4 "Format error". Cause: `servedRange()` used `"suffix" in obj.range`; real R2 returns the range object with all three keys present (unused ones `undefined`), so the suffix branch ran and computed `size - undefined`. Fix: test values (`r.suffix != null`) not key presence. `FakeR2` now returns `{offset, length, suffix: undefined}` like R2 — with that fake the old code fails the existing Range test (`bytes NaN-NaN/5`); 43/43 after. Deployed (`8aa0d9c6`) and verified in-browser: correct `Content-Range` for `0-1`, `0-`, `1000-`, and `play()` advanced to 4.0 s / 10.75 s with no error.
 - Decided: nothing new.
