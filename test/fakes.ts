@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -25,12 +25,12 @@ export function fakeFetch(script: Scripted[] | ((url: string, init: RequestInit)
 export const fixture = (name: string): any =>
   JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", name), "utf8"));
 
-// ruling 2: same fileURLToPath+join pattern as fixture() — the Workers `URL` type
-// clashes with Node's `readFileSync(URL)` overload under tsconfig.test.json.
-export const SCHEMA = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "migrations", "0001_bookmarks.sql"),
-  "utf8",
-);
+// Same fileURLToPath+join pattern as fixture() — the Workers `URL` type clashes with Node's
+// `readFileSync(URL)` overload under tsconfig.test.json. Every migration, in file-name order,
+// so FakeD1 has the same columns as production (wrangler applies them the same way).
+const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+export const SCHEMA = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()
+  .map((f) => readFileSync(join(MIGRATIONS, f), "utf8")).join("\n");
 
 export class FakeKV {
   map = new Map<string, string>();
@@ -127,8 +127,9 @@ export class FakeD1 {
         return stmt;
       },
       async run() {
-        db.prepare(sql).run(...(args as never[]));
-        return { success: true };
+        // Real D1 reports meta.changes (developers.cloudflare.com/d1/worker-api/return-object/#d1result); node:sqlite does too.
+        const r = db.prepare(sql).run(...(args as never[]));
+        return { success: true, meta: { changes: Number(r.changes) } };
       },
       async all<T>() {
         return { results: db.prepare(sql).all(...(args as never[])) as T[] };

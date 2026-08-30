@@ -61,3 +61,10 @@ test("putVideo stores metadata as strings; has() reflects R2", async () => {
   assert.equal(r2.objects.get("1.mp4")!.customMetadata.postedAt, "");
   assert.equal(r2.objects.get("1.mp4")!.contentType, "video/mp4");
 });
+
+test("migration 0002: library columns exist and default to unset", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row());
+  const b = (await s.getBookmark("1"))!;
+  assert.deepEqual([b.title, b.description, b.favorite, b.deleted_at], [null, null, 0, null]);
+});

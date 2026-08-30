@@ -5,8 +5,10 @@ export type BookmarkRow = {
   post_id: string; first_seen_at: string; posted_at: string | null; text: string | null; post_url: string;
   has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null;
   preview_url: string | null; updated_at: string;
+  // Library metadata (migration 0002, ADR-0011). Owner-set; sync never writes them.
+  title: string | null; description: string | null; favorite: 0 | 1; deleted_at: string | null;
 };
-export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at"> & { now: string };
+export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "deleted_at"> & { now: string };
 export type Status = {
   lastRun?: string; lastError?: string | null; auth?: "ok" | "needs_reauth"; counts?: Record<string, number>;
   totalBytes?: number; noMediaRuns?: number; alerts?: Record<string, string>;
