@@ -258,6 +258,7 @@ test("a deleted post is never re-downloaded even though its key is gone from R2 
   const id = "1000000000000000001";
   await w.store.deleteVideos(id);
   await w.store.markDeleted(id, "2026-08-30T00:00:00Z");
+  const before_updated = (await w.store.getBookmark(id))!.updated_at;
   const before = w.f.calls.filter(([u]) => u.includes("video.twimg")).length;
   const r = await sync(w.d);
   assert.equal(r.downloaded, 0);
@@ -266,4 +267,5 @@ test("a deleted post is never re-downloaded even though its key is gone from R2 
   const b = (await w.store.getBookmark(id))!;
   assert.equal(b.deleted_at, "2026-08-30T00:00:00Z");
   assert.equal(b.status, "downloaded", "row untouched by the rerun");
+  assert.equal(b.updated_at, before_updated, "row untouched by the rerun");
 });

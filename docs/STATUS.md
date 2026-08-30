@@ -1,7 +1,7 @@
 Updated: 2026-08-30
 
 ## Now
-- **Video library UI implemented on branch `library-ui`** (commits `d27da2b`, `2b1827c`, `58c574f`, `1393109`, `b03e5bc` on top of `a6f633c`; docs in this session's commit): search/filter/sort grid at `/`, per-video watch page with title/description/favourite/delete (spec `2026-08-30-video-library-design.md`, ADR-0011). 52/52 tests pass, typecheck ok. **Not yet migrated or deployed** — the controller runs `wrangler d1 migrations apply` + `wrangler deploy` after the final review, then verifies in-browser.
+- **Video library UI implemented on branch `library-ui`** (commits `d27da2b`, `2b1827c`, `58c574f`, `1393109`, `b03e5bc` on top of `a6f633c`; final-review fixes committed): search/filter/sort grid at `/`, per-video watch page with title/description/favourite/delete (spec `2026-08-30-video-library-design.md`, ADR-0011). 52/52 tests pass, typecheck ok. **Not yet migrated or deployed** — the controller runs `wrangler d1 migrations apply` + `wrangler deploy` after the final review, then verifies in-browser.
 - **Real X account fully backfilled (2026-08-30, 10:30–12:27 UTC).** 253 bookmarks indexed (X's list exhausted, under the 800 cap): 54 no_video, ~148 downloaded, ~52 failed (mostly `too_large` > 350 MB; exact D1 counts need `wrangler login`, see Blocked). **14.56 GB in R2** — 4.5 GB over the 10 GB free tier (≈ $0.07/mo overage at $0.015/GB-month). `storage` alert fired 12:00:37 UTC (once; never re-fires unless cleared). Confirmation `/backfill?downloads=1` → 0/0. Real-account videos average ~100 MB (test account ~22 MB). Cron (every 30 min, 5 downloads/tick) now handles new bookmarks; `auth: ok`.
 - **v1 merged to `main`** (PR #1, 2026-08-30); work continues on short-lived branches + PRs, CI (`check`) gates them.
 

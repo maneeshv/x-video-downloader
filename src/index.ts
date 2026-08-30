@@ -92,6 +92,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     const id = api[1]!;
     if (!POST_ID_RE.test(id)) return new Response("not found", { status: 404 });
     if (req.method === "DELETE") {
+      // ponytail: a cron tick between deleteVideos and markDeleted can re-download the object under the tombstone; a repeat DELETE (row is still 'downloaded') cleans it up.
       // R2 first, tombstone second (spec §5): a tombstone must never exist for a video still in R2.
       // A repeat delete is a 204: the row is still `downloaded`, and R2 delete ignores missing keys.
       if ((await store.getBookmark(id))?.status !== "downloaded") return new Response("not found", { status: 404 });

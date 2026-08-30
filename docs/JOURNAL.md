@@ -12,6 +12,7 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
   the docs true: ADR-0011, ARCHITECTURE (routes, D1 schema, sync step, test doubles, related
   ADRs), PRODUCT (non-goal line replaced, library scope bullet added), deploy runbook §2
   (migration step now names both migration files and says "run before deploy"), STATUS.
+  Final-review fix wave: ARCHITECTURE 400 wording, ADR-0011 video-count estimate, delete/cron race comment, no-referrer meta, updated_at assertion in the tombstone test.
 - Decided: ADR-0011 — library metadata lives on the existing `bookmarks` row (no new table);
   `DELETE /api/videos/:id` runs the R2 delete before the D1 tombstone, per the owner's 2026-08-30
   choice that delete frees R2 space (over hide-only or keep-both).

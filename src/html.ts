@@ -26,7 +26,7 @@ input[type=search]{flex:1;min-width:10rem}
 button.danger{margin-left:auto;border-color:#f85149;color:#f85149}#msg{color:#8b949e}.src{white-space:pre-wrap;color:#c9d1d9}`;
 
 const page = (t: string, body: string) =>
-  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(t)}</title><style>${CSS}</style><body>${body}`;
+  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(t)}</title><style>${CSS}</style><body>${body}`;
 
 export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}): string {
   const link = (over: Partial<LibraryQuery>) => {
