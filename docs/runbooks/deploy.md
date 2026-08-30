@@ -59,7 +59,7 @@ Edit `wrangler.toml` `[vars]` directly, then `npx wrangler deploy`. `PUBLIC_ORIG
 npx wrangler secret put X_CLIENT_ID          # done 2026-08-30, read from .env, never echoed
 npx wrangler secret put X_CLIENT_SECRET      # done 2026-08-30, ditto
 npx wrangler secret put TELEGRAM_BOT_TOKEN   # done 2026-08-30, read from .env, never echoed
-npx wrangler secret put TELEGRAM_CHAT_ID     # needs getUpdates first, see below (owner)
+npx wrangler secret put TELEGRAM_CHAT_ID     # done 2026-08-30 (getUpdates only shows messages <24 h old — resend if empty)
 ```
 Read a secret value from `.env` without ever printing it:
 ```bash

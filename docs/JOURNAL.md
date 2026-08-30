@@ -5,7 +5,7 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
 - Did: owner enabled Access on the Production workers.dev row and supplied the AUD tag + team domain; set `TEAM_DOMAIN`/`POLICY_AUD` in `wrangler.toml`, `wrangler secret put X_CLIENT_ID`/`X_CLIENT_SECRET` from `.env` (never echoed), `wrangler deploy` (version `bbc12cbd`). Verified `/status` → 302 to the Access login with `kid` = our AUD. Recorded the public values in `docs/runbooks/deploy.md` §6.
 - Decided: nothing new.
 - Learned / gotcha: the Worker's Access dialog defaults Scope to **Previews only** — production stays public unless you pick **All traffic**. Telegram `getUpdates` only returns messages from the last 24 h; an older message yields an empty result and the owner must resend.
-- Left undone: `TELEGRAM_CHAT_ID` (owner must resend a message to the bot); owner has not yet run `/oauth/start` and `/backfill`.
+- Left undone: owner has not yet passed the Access login (OTP email not arriving) so `/oauth/start`/`/backfill` are pending; PR needs a GitHub remote first. `TELEGRAM_CHAT_ID` set later the same session (test alert delivered).
 
 ## 2026-08-30 — Owner asked how to get X OAuth 2.0 creds + enable Access
 - Did: answered from `docs/runbooks/setup-x-developer-app.md` + `deploy.md` §6; verified the Cloudflare side against docs and corrected the dashboard path (Access toggle now lives in the Worker's **Domains** tab as an **Enable Access →** link per URL row, plus an **Access** tab; changelog 2026-05-14 — confirmed from the owner's screenshot).
