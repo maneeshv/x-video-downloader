@@ -11,7 +11,7 @@ const day = (r: BookmarkRow) => (r.posted_at ?? r.first_seen_at).slice(0, 10);
 const CSS = `:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101418;color:#e6e9ee;font:15px/1.4 system-ui,sans-serif}
 a{color:inherit;text-decoration:none}
 header{position:sticky;top:0;z-index:1;background:#161b22;border-bottom:1px solid #262c36;padding:.6rem 1rem}
-header form{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}.brand{font-weight:700;margin-right:.5rem}
+header,header form{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}header form{flex:1}.brand{font-weight:700;margin-right:.5rem}.out{margin-left:auto}
 input,select,textarea,button{font:inherit;color:inherit;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:.4rem .6rem}
 input[type=search]{flex:1;min-width:10rem}
 .pill{border:1px solid #30363d;border-radius:999px;padding:.3rem .8rem}.pill.on,button.on{background:#f0b429;color:#101418;border-color:#f0b429}
@@ -56,12 +56,13 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   <select name="sort" onchange="this.form.submit()">${sorts}</select>
   <a class="pill${q.fav ? " on" : ""}" href="${link({ fav: !q.fav })}">★ Favourites</a>
   <span class="count">${rows.length} videos · last run ${esc(status.lastRun ?? "never")} · <a href="/stats">Stats</a>${status.auth === "needs_reauth" ? ' · <a href="/oauth/start">re-authorize</a>' : ""}</span>
+  <a class="pill" href="/cdn-cgi/access/logout">Log out</a>
 </form></header>
 <main class="grid">${cards || '<p class="empty">No videos match. <a href="/">Show all</a></p>'}</main>`);
 }
 
 export function renderWatch(r: BookmarkRow): string {
-  return page(title(r), `<header><a class="brand" href="/">← Library</a></header>
+  return page(title(r), `<header><a class="brand" href="/">← Library</a><a class="pill out" href="/cdn-cgi/access/logout">Log out</a></header>
 <main class="watch">
   <video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video>
   <form id="meta">
@@ -100,7 +101,7 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
   };
   const c = status.counts ?? {};
   const alerts = Object.entries(status.alerts ?? {}).map(([k, t]) => `${esc(k)} ${esc(t)}`).join(", ");
-  return page("Stats", `<header><a class="brand" href="/">← Library</a> <a class="pill" href="/backfill?downloads=30">Run backfill now</a></header>
+  return page("Stats", `<header><a class="brand" href="/">← Library</a> <a class="pill" href="/backfill?downloads=30">Run backfill now</a><a class="pill out" href="/cdn-cgi/access/logout">Log out</a></header>
 <main class="stats">
   <div class="tiles">
     ${tile("downloaded", "Downloaded", n("downloaded"))}${tile("pending", "Pending", n("pending"))}${tile("failed", "Failed", n("failed"), n("failed") ? "bad" : "")}
