@@ -1,5 +1,9 @@
-# Journal
-Append-only, newest first. Template in `docs/STANDARDS.md`.
+## 2026-08-31 — `MAX_FILE_BYTES` 350 MB → 1 GB (owner decision; branch `feeble-vampirebat`)
+- Did: `src/limits.ts` `MAX_FILE_BYTES = 1024 ** 3` (provenance comment updated), `test/limits.test.ts` asserts the new value, ARCHITECTURE sync-step line, ADR-0005 amendment line. `npm run check` green (57 tests, typecheck ok).
+- Decided: ADR-0005 amended in place (same pattern as the 2026-08-30 200 → 350 MB amendment). Resolves STATUS Next #4 (raise-the-cap vs accept) in favour of raising.
+- Learned / gotcha: none.
+- Left undone: not deployed (owner deploy approval, ADR-0010). The 52 `too_large` rows stay `failed` until Retry on `/stats` (per row) or the `reset-store.md` one-liner `UPDATE bookmarks SET status='pending', error=NULL WHERE error='too_large'`; cron then drains them at 5/tick — or `/backfill?downloads=30`. Expect R2 to grow well past 10 GB (52 files of 350 MB–1 GB); the 9 GB `storage` alert already fired, so no further alert will warn. Videos > 1 GB still fail `too_large`.
+
 
 ## 2026-08-30 — Log out button in the library UI (owner request; branch `feat/library-ui-logout-button`)
 - Did: `src/html.ts` — a `Log out` pill linking to `/cdn-cgi/access/logout` in the `<header>` of both `renderIndex` and `renderWatch`; the watch header became a flex row (`header,header form{display:flex…}`, `.out{margin-left:auto}`) so the pill sits at the far right on both pages. One new test in `test/index.test.ts` asserts the pages carry the href (52 → 53 tests; typecheck clean). Merged `origin/main` (`1927615`, PRs #6 custom domain + #7 `/stats`): resolved conflicts in `html.ts` (Stats link + Log out coexist), tests, GOTCHAS, JOURNAL, STATUS; the `/stats` header got the same pill (57 tests after merge). ARCHITECTURE routes section notes that the path is answered by Cloudflare at the edge, never the Worker. Deleted the wrangler-sandbox GOTCHAS line as STATUS Next #4 instructed (baked into `agent-setup.md` step 5).
