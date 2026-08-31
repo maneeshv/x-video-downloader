@@ -37,6 +37,11 @@ Skip PRODUCT/ARCHITECTURE unless unfamiliar or changing them.
 END (before saying "done"):
 1. Prepend an entry to `docs/JOURNAL.md` (template in `docs/STANDARDS.md`).
    Its "Learned / gotcha" line: anything that outlives the session → also `docs/GOTCHAS.md`.
+   What counts (not judgment — a trigger): a command that failed then worked with different flags
+   or unsandboxed; an error message that pointed at the wrong cause; a first assumption that was
+   wrong; a bug that is a pattern (→ a rule in `docs/STANDARDS.md`, not just a fix).
+   END is re-run for every turn after "done" that used tools (push, PR, deploy, follow-up fix):
+   amend the same JOURNAL entry; new gotcha → GOTCHAS in that turn, not "next session".
 2. Rewrite `docs/STATUS.md` so Now / Next / Blocked are true as of today.
 3. Non-obvious choice made → new ADR. Choice deferred → line in `docs/QUESTIONS.md`.
    Owner asks "why is it done this way?" and the answer is not already an ADR → that is a

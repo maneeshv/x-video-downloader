@@ -37,6 +37,7 @@ A marker in the wrong file is a bug (e.g. `DECIDED` outside an ADR).
 - Hard limits (max requests per run, max downloads per run, max file size, storage cap) are **constants in code**, not config. See `docs/research/2026-08-29-persona-security.md`.
 - No `TODO` comments. Deliberate ceilings use `// ponytail: <what and when to upgrade>`. Decisions go to QUESTIONS; work goes to STATUS.
 - Never log a secret. One helper builds the auth headers; log only status codes and URL paths.
+- When a check rejects on a measured value (size, count, duration, status), persist the value alongside the error — never just the label. A bare `too_large` cost a session on 2026-08-31: `download()` read `Content-Length` to refuse the file and discarded it, so `/stats` had no size to show for 52 failed rows until they were re-fetched.
 - Secrets: `wrangler secret put` in prod, `.dev.vars` locally (gitignored). `wrangler.toml.example` is committed; real `wrangler.toml` is not.
 - Tests: `node --test` (stdlib), one fixture per external API shape. No test framework unless an ADR says so.
 - Library facts come from Context7 MCP or cited docs, not from memory.
