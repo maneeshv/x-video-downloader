@@ -87,6 +87,12 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
 
   const d = deps(env, f);
   const { store } = d;
+  if (url.pathname === "/api/videos/retry-all") {
+    // Matched before the :id pattern (it would read "retry-all" as a post id → 404). Same JSON-only rule as the other POSTs.
+    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (!req.headers.get("content-type")?.startsWith("application/json")) return new Response("json only", { status: 415 });
+    return json({ retried: await store.retryAll(new Date().toISOString()) });
+  }
   const api = /^\/api\/videos\/([^/]+)(\/retry)?$/.exec(url.pathname);
   if (api) {
     const id = api[1]!;

@@ -23,7 +23,7 @@ OAuth user change. `wrangler` has no `r2 object list`, so R2 keys are derived fr
    npx wrangler d1 execute x-downloader --remote --command "DELETE FROM bookmarks"
    for k in oauth status userId; do npx wrangler kv key delete "$k" --binding KV --remote; done
    ```
-   Only reset the cap-skipped rows instead? `UPDATE bookmarks SET status='pending', error=NULL WHERE error='too_large'` (after raising `MAX_FILE_BYTES`).
+   Only re-queue the failed rows instead? Click **Retry all failed** on `${PUBLIC_ORIGIN}/stats` (resets every `failed` row; `POST /api/videos/retry-all`). Raw SQL equivalent, scoped to one reason: `UPDATE bookmarks SET status='pending', error=NULL WHERE error='too_large'`.
 4. Unpause: `npx wrangler kv key delete paused_until --binding KV --remote`.
 5. Sign in to x.com as the account to archive, open `${PUBLIC_ORIGIN}/oauth/start`, approve; `/status` shows the new `userId`.
 6. Drain: open `${PUBLIC_ORIGIN}/backfill?downloads=30` repeatedly until it returns `downloaded: 0, failed: 0` (~3 min per call).

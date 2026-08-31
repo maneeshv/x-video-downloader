@@ -250,3 +250,20 @@ test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; 
   assert.equal((await jsonPost(a, "/api/videos/bad!/retry", {})).status, 404, "bad id");
   assert.equal((await a.send("/api/videos/22222/retry", { method: "GET" })).status, 405);
 });
+
+test("POST /api/videos/retry-all resets every failed row to pending and returns the count; json only", async () => {
+  const a = await seeded();
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
+  await a.store.upsertBookmark(dlRow("22223", { status: "failed", error: "http_403", r2_key: null, bytes: null }));
+  assert.ok((await a.get("/stats")).ok);
+  assert.ok((await (await a.get("/stats")).text()).includes('id="retry-all"'), "button in the failed section");
+  assert.equal((await a.send("/api/videos/retry-all", { method: "POST" })).status, 415, "no content-type");
+  assert.equal((await a.send("/api/videos/retry-all", { method: "GET" })).status, 405);
+  const res = await jsonPost(a, "/api/videos/retry-all", {});
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") ?? "", /^application\/json/);
+  assert.deepEqual(await res.json(), { retried: 2 });
+  assert.equal((await a.store.getBookmark("22222"))!.status, "pending");
+  assert.equal((await a.store.getBookmark("12345"))!.status, "downloaded");
+  assert.deepEqual(await (await jsonPost(a, "/api/videos/retry-all", {})).json(), { retried: 0 });
+});
