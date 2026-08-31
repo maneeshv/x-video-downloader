@@ -92,4 +92,4 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
 --test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
 0009 (refuse unknown-length video bodies instead of buffering), 0011 (library metadata in D1;
-delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending).
+delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime).
