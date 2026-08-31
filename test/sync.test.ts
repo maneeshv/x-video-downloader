@@ -119,6 +119,7 @@ test("video too large → failed/too_large, nothing stored; 5xx → pending/http
   const r = await sync(w.d);
   assert.equal(r.downloaded, 0); assert.equal(r.failed, 2); assert.equal(w.r2.objects.size, 0);
   assert.deepEqual([(await w.store.getBookmark("1000000000000000001"))!.status, (await w.store.getBookmark("1000000000000000001"))!.error], ["failed", "too_large"]);
+  assert.equal((await w.store.getBookmark("1000000000000000001"))!.bytes, MAX_FILE_BYTES + 1, "too_large records the size it refused");
   assert.deepEqual([(await w.store.getBookmark("1000000000000000002"))!.status, (await w.store.getBookmark("1000000000000000002"))!.error], ["pending", "http_503"]);
 
   // permanently failed (too_large) must not be retried; transiently failed (http_503) must be

@@ -1,25 +1,23 @@
 Updated: 2026-08-31
 
 ## Now
-- **Log out button** on the library, watch and `/stats` pages — links to Cloudflare Access's `/cdn-cgi/access/logout` (edge-handled, no Worker route). Merged via PR #8 (2026-08-30); 57/57 tests, typecheck ok. **Not deployed yet** — the live version (`8943f06c`) predates it.
-- **`/stats` observability page live** at `https://xrender.uk/stats` (deployed 2026-08-30, version `8943f06c-adcc-4830-b4f0-28b77dfe027f`; merged to `main` via PR #7): tiles (downloaded / pending / failed / no video / deleted / stored), health table, failures by reason, pending + failed post lists with a per-row Retry (`POST /api/videos/:id/retry`, failed → pending) and a "Run backfill now" link. ADR-0013. Verified through Access: 148 / 0 / 52 (`too_large`) / 54 / 0 / 13.56 GB. A first deploy with a stale worktree `wrangler.toml` (version `15143be0`) briefly re-enabled workers.dev; fixed by the redeploy — see deploy runbook "Before every deploy".
-- **Serving on `https://xrender.uk`** (Custom Domain, ADR-0012; first deployed 2026-08-30 as version `3fc29825`). Access covers it with the unchanged AUD; `x-downloader.x-downloader.workers.dev` is off (404). X app callback updated and re-consented 2026-08-30 17:55:46Z; cron runs on it, `auth: ok`. Merged via PR #6.
-- **Video library UI live** (deployed 2026-08-30, version `82c1c5c3-3e6a-4a47-9f12-521023391187`; migration `0002_library.sql` applied). Merged via PR #5.
-- **Real X account fully backfilled (2026-08-30).** 253 bookmarks indexed: 54 no_video, 148 downloaded, 52 failed (all `too_large` > 350 MB). **14.56 GB in R2** — 4.5 GB over the 10 GB free tier (≈ $0.07/mo); `storage` alert fired once. Cron (every 30 min, 5 downloads/tick) handles new bookmarks; `auth: ok`.
-- Work continues on short-lived branches + PRs; CI (`check`) gates them.
+- **Live = `main` `eb02b42`** (deployed 2026-08-31 as version `3e4ea5ba-00d3-4ca7-92bf-47814c3b3030`; trigger `xrender.uk (custom domain)`, workers.dev 404): `/stats` failed list has a **Size column** and `too_large` failures now record the refused `Content-Length` in `bookmarks.bytes` (PR #13). Verified through Access. The 8 rows that failed before this deploy show a blank Size until retried.
+- **Session-protocol hooks (ADR-0014) are on `main`**: `.claude/settings.json` + `.claude/hooks/session-protocol.sh` block a turn from ending if code changed without JOURNAL/STATUS or a Bash command failed without a gotcha check. Active in every session started after 2026-08-31 (hooks load at session start).
+- **Real account state (read from `/stats` 2026-08-31):** 190 downloaded / 0 pending / 8 failed (all `too_large`, i.e. > 1 GB) / 56 no video / 1 deleted / **35.91 GB in R2** (≈ 26 GB over the 10 GB free tier ≈ $0.39/mo). The owner already retried the 52 `too_large` rows after the 1 GB cap; 44 downloaded. Cron every 30 min, `auth: ok`, last run 2026-08-31T07:30:26Z; the 9 GB `storage` alert fired once (2026-08-30) and will not re-fire.
+- Serving on `https://xrender.uk` (ADR-0012) behind Access; Log out button live (PR #8); work continues on short-lived branches + PRs, CI (`check`) gates them.
 
 ## Next
-1. Owner: merge the docs-only follow-up PR from `feat/analytics-dashboard-ui` (deploy record + runbook pre-check; PR #7 merged before it was written).
-2. Owner: `npx wrangler deploy` from an up-to-date `main` checkout (ADR-0010: manual; no migration) to ship the Log out button — run the deploy runbook's "Before every deploy" `wrangler.toml` diff first. After deploy, click **Log out** once and confirm the Access login page appears.
-3. Owner: decide on R2 over the free tier — keep (≈ $0.07/mo) or trim with the Delete button. `/stats` "Stored" reflects deletes; KV `status.totalBytes` (and the 9 GB alert) decreases on delete once PR `fix/totalbytes-on-delete` is merged and deployed. Pre-existing, unexplained: KV `totalBytes` (14.56 GB) is ~1 GB above `/stats` Stored (13.56 GB, D1 `SUM(bytes)`, 0 deleted) — D1 is the truth; reset KV with `wrangler kv key put` if the 9 GB alert threshold matters.
-4. Owner (via `https://xrender.uk/stats`): look at the 52 `too_large` posts and decide raise-the-cap vs accept; Retry only helps them if `MAX_FILE_BYTES` changes.
+1. Owner: update the main checkout's gitignored `/Users/maneesh/Developer/personal-project/x-downloader/wrangler.toml` to match `wrangler.toml.example` (`[[routes]]`, `PUBLIC_ORIGIN = https://xrender.uk`). The drift has now tripped **three** worktrees (2026-08-30, 2026-08-31 ×2); the pre-check catches it but only the source fix ends it. Merge the docs PR from `docs/deploy-stats-size`.
+2. Owner (optional): Retry the 8 remaining `too_large` rows on `https://xrender.uk/stats` — they will fail again (> 1 GB) but now record their size, so the Size column shows how far over the cap each is. Then decide: raise `MAX_FILE_BYTES` again (ADR-0005 amendment) or leave them.
+3. Owner: R2 is at 35.91 GB. Trim with the Delete button if the ≈ $0.39/mo matters; KV `status.totalBytes` (and the 9 GB alert) decreases on delete once PR `fix/totalbytes-on-delete` is merged and deployed (D1 `SUM(bytes)` on `/stats` is the truth either way).
+4. Owner: click **Log out** once on `https://xrender.uk` and confirm the Access login page appears (still unexercised).
 
 ## Blocked
 - Nothing agent-side.
 
 ## Done recently (last 5; older in JOURNAL)
 - 2026-08-31 `DELETE /api/videos/:id` subtracts the row's bytes from KV `totalBytes` (branch `fix/totalbytes-on-delete`, PR pending; 58 tests). Not deployed.
-- 2026-08-30 Log out link on library/watch/stats pages (PR #8; 57 tests). Not yet deployed.
-- 2026-08-30 `/stats` page + Retry endpoint deployed (version `8943f06c`, ADR-0013, PR #7); 52 → 56 tests; worktree `wrangler.toml` drift caught and baked into the deploy runbook.
-- 2026-08-30 Custom domain `xrender.uk` live (version `3fc29825`), workers.dev off, ADR-0012; wrangler-sandbox GOTCHAS line retired.
-- 2026-08-30 Paseo worktree bootstrap (`.worktreeinclude`, `paseo.json`, copy script); library UI merged (PR #5).
+- 2026-08-31 Deployed `main` `eb02b42` as `3e4ea5ba` (Size column + size recording + hooks); `wrangler.toml` drift tripped a third time, caught by the pre-check.
+- 2026-08-31 Session-protocol hooks gate every Stop (ADR-0014; `check-session.sh` takes a BASE ref).
+- 2026-08-31 `/stats` failed list shows file size; `too_large` records the refused size in D1 (branch `feat/stats-failed-jobs-file-size`, 57 tests).
+- 2026-08-31 Deployed `main` `a1f8f99` twice (`ddf0cb8f`, then `25913a4a` live): Log out button + 1 GB cap on xrender.uk; the `wrangler.toml` drift gotcha re-tripped in both worktrees (one deployed stale `7915346e`, corrected within 2 min; the other caught it pre-deploy).
