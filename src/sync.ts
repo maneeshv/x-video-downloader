@@ -1,6 +1,6 @@
 import {
   BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS,
-  MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES,
+  MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
 } from "#src/limits";
 import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
 import { fetchBookmarks, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
@@ -175,7 +175,11 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
   const noMediaRuns = resultCount > 0 && !sawMedia ? (s.noMediaRuns ?? 0) + 1 : 0;
   if (noMediaRuns >= STALE_PARSER_RUNS) await alert(d, "stale_parser", `${noMediaRuns} runs with bookmarks but zero media — parser may be stale`);
   const totalBytes = (s.totalBytes ?? 0) + res.bytes;
-  if (totalBytes > STORAGE_ALERT_BYTES) await alert(d, "storage", `stored ${(totalBytes / 1024 ** 3).toFixed(2)} GB (> 9 GB)`);
+  // One alert per STORAGE_ALERT_STEP_BYTES step crossed (key "storage:12GB"); every other storage key is dropped,
+  // so a decrease (delete) below a step re-arms it, and the pre-2026-08-31 one-shot "storage" key retires itself.
+  const stepGB = Math.floor(totalBytes / STORAGE_ALERT_STEP_BYTES) * STORAGE_ALERT_STEP_BYTES / 1024 ** 3;
+  for (const k of Object.keys(s.alerts ?? {})) if (k.startsWith("storage") && k !== `storage:${stepGB}GB`) await clearAlert(d, k);
+  if (totalBytes > STORAGE_ALERT_BYTES) await alert(d, `storage:${stepGB}GB`, `stored ${(totalBytes / 1024 ** 3).toFixed(2)} GB (> ${stepGB} GB)`);
   await d.store.patchStatus({
     lastRun: iso(now(d)), lastError: null, auth: "ok", totalBytes, noMediaRuns,
     counts: { seen: res.seen, downloaded: res.downloaded, failed: res.failed, pages: res.pages },
