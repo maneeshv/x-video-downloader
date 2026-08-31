@@ -62,7 +62,7 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
 }
 
 export function renderWatch(r: BookmarkRow): string {
-  return page(title(r), `<header><a class="brand" href="/">← Library</a><a class="pill out" href="/cdn-cgi/access/logout">Log out</a></header>
+  return page(title(r), `<header><a class="brand" href="/">← Library</a><a class="pill" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a><a class="pill out" href="/cdn-cgi/access/logout">Log out</a></header>
 <main class="watch">
   <video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video>
   <form id="meta">
