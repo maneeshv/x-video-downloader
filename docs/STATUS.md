@@ -9,14 +9,14 @@ Updated: 2026-08-31
 ## Next
 1. Owner: update the main checkout's gitignored `/Users/maneesh/Developer/personal-project/x-downloader/wrangler.toml` to match `wrangler.toml.example` (`[[routes]]`, `PUBLIC_ORIGIN = https://xrender.uk`). The drift has now tripped **three** worktrees (2026-08-30, 2026-08-31 ×2); the pre-check catches it but only the source fix ends it. Merge the docs PR from `docs/deploy-stats-size`.
 2. Owner (optional): Retry the 8 remaining `too_large` rows on `https://xrender.uk/stats` — they will fail again (> 1 GB) but now record their size, so the Size column shows how far over the cap each is. Then decide: raise `MAX_FILE_BYTES` again (ADR-0005 amendment) or leave them.
-3. Owner: R2 is at 35.91 GB. Trim with the Delete button if the ≈ $0.39/mo matters; KV `status.totalBytes` (and the 9 GB alert) decreases on delete once PR `fix/totalbytes-on-delete` is merged and deployed (D1 `SUM(bytes)` on `/stats` is the truth either way).
+3. Owner: R2 is at 35.91 GB. Trim with the Delete button if the ≈ $0.39/mo matters; KV `status.totalBytes` (and the 9 GB alert) decreases on delete once branch `fix/totalbytes-on-delete` (pushed 2026-08-31; owner opens the PR — `gh` here is the work account, see GOTCHAS) is merged and deployed (D1 `SUM(bytes)` on `/stats` is the truth either way).
 4. Owner: click **Log out** once on `https://xrender.uk` and confirm the Access login page appears (still unexercised).
 
 ## Blocked
 - Nothing agent-side.
 
 ## Done recently (last 5; older in JOURNAL)
-- 2026-08-31 `DELETE /api/videos/:id` subtracts the row's bytes from KV `totalBytes` (branch `fix/totalbytes-on-delete`, PR pending; 58 tests). Not deployed.
+- 2026-08-31 `DELETE /api/videos/:id` subtracts the row's bytes from KV `totalBytes` (branch `fix/totalbytes-on-delete` pushed; PR to be opened by owner; 58 tests). Not deployed.
 - 2026-08-31 Deployed `main` `eb02b42` as `3e4ea5ba` (Size column + size recording + hooks); `wrangler.toml` drift tripped a third time, caught by the pre-check.
 - 2026-08-31 Session-protocol hooks gate every Stop (ADR-0014; `check-session.sh` takes a BASE ref).
 - 2026-08-31 `/stats` failed list shows file size; `too_large` records the refused size in D1 (branch `feat/stats-failed-jobs-file-size`, 57 tests).
