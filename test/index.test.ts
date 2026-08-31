@@ -219,7 +219,7 @@ test("library, watch and stats pages link to the Access logout URL", async () =>
 test("/stats shows counts, failures by reason, and the pending/failed posts; / links to it", async () => {
   const a = await seeded();
   await a.store.upsertBookmark(dlRow("12346", { bytes: 7 }));
-  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null, text: "<b>big</b> one" }));
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: 1536 * 1024 ** 2, text: "<b>big</b> one" }));
   await a.store.upsertBookmark(dlRow("22223", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
   await a.store.upsertBookmark(dlRow("33333", { status: "pending", r2_key: null, bytes: null }));
   await a.store.upsertBookmark(dlRow("44444", { status: "no_video", has_video: 0, r2_key: null, bytes: null }));
@@ -231,7 +231,7 @@ test("/stats shows counts, failures by reason, and the pending/failed posts; / l
   for (const needle of [
     'data-stat="downloaded">1<', 'data-stat="pending">1<', 'data-stat="failed">2<', 'data-stat="no_video">1<', 'data-stat="deleted">1<',
     'data-stat="bytes">5 B<', "too_large</td><td>2", "&lt;b&gt;big&lt;/b&gt; one", "2026-08-30T12:00:00Z", "storage", "seen 20",
-    'href="https://x.com/i/status/33333"', 'data-retry="22222"', 'href="/backfill',
+    'href="https://x.com/i/status/33333"', 'data-retry="22222"', 'href="/backfill', "<th>Size</th>", '<td>1536.0 MB</td><td><button type="button" data-retry="22222"',
   ]) assert.ok(body.includes(needle), needle);
   assert.ok(!body.includes("<b>big</b>"), "text is escaped");
   assert.ok((await (await a.get("/")).text()).includes('href="/stats"'), "library header links to /stats");
