@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-08-31 — `status.totalBytes` decreases on delete (STATUS Next #3; branch `fix/totalbytes-on-delete`)
+- Did: `DELETE /api/videos/:postId` (`src/index.ts`) now subtracts the D1 row's `bytes` (the same number sync added) from KV `status.totalBytes`, clamped at 0, only when the row's `deleted_at` was null before the call — a repeat DELETE (row stays `downloaded`, ADR-0011) does not subtract twice. TDD: one new route test in `test/index.test.ts` (12 → 7, repeat stays 7, 3 − 5 → 0) seen red first; 57 → 58 tests, typecheck clean. ARCHITECTURE routes + `/stats` lines updated.
+- Decided: nothing new — the row's `bytes` column is used rather than an R2 `head()` before delete (one D1 read the route already does; no extra R2 call). No ADR.
+- Learned / gotcha: none.
+- Left undone: not deployed (ADR-0010). Unrelated pre-existing gap noticed while reading STATUS: KV `totalBytes` read 14.56 GB while `/stats` Stored (D1 `SUM(bytes)`) read 13.56 GB with 0 deleted rows on 2026-08-30 — this fix does not explain or close it; recorded in STATUS Next #3 for the owner.
+
 ## 2026-08-30 — Log out button in the library UI (owner request; branch `feat/library-ui-logout-button`)
 - Did: `src/html.ts` — a `Log out` pill linking to `/cdn-cgi/access/logout` in the `<header>` of both `renderIndex` and `renderWatch`; the watch header became a flex row (`header,header form{display:flex…}`, `.out{margin-left:auto}`) so the pill sits at the far right on both pages. One new test in `test/index.test.ts` asserts the pages carry the href (52 → 53 tests; typecheck clean). Merged `origin/main` (`1927615`, PRs #6 custom domain + #7 `/stats`): resolved conflicts in `html.ts` (Stats link + Log out coexist), tests, GOTCHAS, JOURNAL, STATUS; the `/stats` header got the same pill (57 tests after merge). ARCHITECTURE routes section notes that the path is answered by Cloudflare at the edge, never the Worker. Deleted the wrangler-sandbox GOTCHAS line as STATUS Next #4 instructed (baked into `agent-setup.md` step 5).
 - Decided: no ADR — the URL is Cloudflare's documented logout mechanism (https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/), not a design choice. Logout is team-wide (all Access apps), not per-app; acceptable for a single-owner tool.

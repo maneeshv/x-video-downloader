@@ -1,4 +1,4 @@
-Updated: 2026-08-30
+Updated: 2026-08-31
 
 ## Now
 - **Log out button** on the library, watch and `/stats` pages — links to Cloudflare Access's `/cdn-cgi/access/logout` (edge-handled, no Worker route). Merged via PR #8 (2026-08-30); 57/57 tests, typecheck ok. **Not deployed yet** — the live version (`8943f06c`) predates it.
@@ -11,15 +11,15 @@ Updated: 2026-08-30
 ## Next
 1. Owner: merge the docs-only follow-up PR from `feat/analytics-dashboard-ui` (deploy record + runbook pre-check; PR #7 merged before it was written).
 2. Owner: `npx wrangler deploy` from an up-to-date `main` checkout (ADR-0010: manual; no migration) to ship the Log out button — run the deploy runbook's "Before every deploy" `wrangler.toml` diff first. After deploy, click **Log out** once and confirm the Access login page appears.
-3. Owner: decide on R2 over the free tier — keep (≈ $0.07/mo) or trim with the Delete button. `/stats` "Stored" reflects deletes; KV `status.totalBytes` (and the 9 GB alert) still does not decrease on delete — one-line fix in the `DELETE` route if the alert should track trimming.
+3. Owner: decide on R2 over the free tier — keep (≈ $0.07/mo) or trim with the Delete button. `/stats` "Stored" reflects deletes; KV `status.totalBytes` (and the 9 GB alert) decreases on delete once PR `fix/totalbytes-on-delete` is merged and deployed. Pre-existing, unexplained: KV `totalBytes` (14.56 GB) is ~1 GB above `/stats` Stored (13.56 GB, D1 `SUM(bytes)`, 0 deleted) — D1 is the truth; reset KV with `wrangler kv key put` if the 9 GB alert threshold matters.
 4. Owner (via `https://xrender.uk/stats`): look at the 52 `too_large` posts and decide raise-the-cap vs accept; Retry only helps them if `MAX_FILE_BYTES` changes.
 
 ## Blocked
 - Nothing agent-side.
 
 ## Done recently (last 5; older in JOURNAL)
+- 2026-08-31 `DELETE /api/videos/:id` subtracts the row's bytes from KV `totalBytes` (branch `fix/totalbytes-on-delete`, PR pending; 58 tests). Not deployed.
 - 2026-08-30 Log out link on library/watch/stats pages (PR #8; 57 tests). Not yet deployed.
 - 2026-08-30 `/stats` page + Retry endpoint deployed (version `8943f06c`, ADR-0013, PR #7); 52 → 56 tests; worktree `wrangler.toml` drift caught and baked into the deploy runbook.
 - 2026-08-30 Custom domain `xrender.uk` live (version `3fc29825`), workers.dev off, ADR-0012; wrangler-sandbox GOTCHAS line retired.
 - 2026-08-30 Paseo worktree bootstrap (`.worktreeinclude`, `paseo.json`, copy script); library UI merged (PR #5).
-- 2026-08-30 Video library UI deployed (version `82c1c5c3`), migration `0002` applied, verified in-browser; ADR-0011; 43 → 52 tests.
