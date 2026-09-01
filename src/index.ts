@@ -1,7 +1,7 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex, renderStats, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
-import { Store, type LibraryQuery, type MetaPatch } from "#src/store";
+import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
 
@@ -78,6 +78,19 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
   return Object.keys(p).length ? p : null;
 }
 
+function parseLibraryQuery(url: URL): LibraryQuery {
+  const sort = url.searchParams.get("sort"), rawPage = Number(url.searchParams.get("page"));
+  const rawPerPage = Number(url.searchParams.get("perPage"));
+  return {
+    q: url.searchParams.get("q")?.trim() || undefined,
+    fav: url.searchParams.get("fav") === "1",
+    sort: sort === "oldest" || sort === "title" ? sort : "newest",
+    page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
+    perPage: LIBRARY_PAGE_SIZES.includes(rawPerPage as typeof LIBRARY_PAGE_SIZES[number])
+      ? rawPerPage as typeof LIBRARY_PAGE_SIZES[number] : DEFAULT_LIBRARY_PAGE_SIZE,
+  };
+}
+
 export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promise<Response> {
   const url = new URL(req.url);
   // Every route, including the OAuth callback, sits behind Access (spec §4); the JWT check defends a misconfigured policy.
@@ -129,16 +142,18 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
 
   if (url.pathname === "/") {
-    const sort = url.searchParams.get("sort");
-    const q: LibraryQuery = { q: url.searchParams.get("q")?.trim() || undefined, fav: url.searchParams.get("fav") === "1", sort: sort === "oldest" || sort === "title" ? sort : "newest" };
-    return html(renderIndex(await store.listLibrary(q), await store.getStatus(), q));
+    const q = parseLibraryQuery(url), total = await store.countLibrary(q);
+    const perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    q.page = Math.min(q.page ?? 1, totalPages);
+    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total));
   }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {
     if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
     const b = await store.getBookmark(watch[1]!);
     if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
-    return html(renderWatch(b));
+    return html(renderWatch(b, parseLibraryQuery(url)));
   }
   if (url.pathname.startsWith("/v/")) {
     let key: string;
