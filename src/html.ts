@@ -124,9 +124,11 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
   ${table("pending")}
   <h2>Failed</h2>
   <p class="d">Retry resets a post to pending; it is re-attempted the next time a sync sees it (cron rescans the newest page, backfill scans everything). <code>too_large</code> fails again unless the size cap changes.</p>
+  ${n("failed") ? `<p><button type="button" id="retry-all">Retry all failed (${n("failed")})</button></p>` : ""}
   ${table("failed")}
 </main>
 <script>
 document.querySelectorAll("[data-retry]").forEach(b=>b.onclick=async()=>{b.disabled=true;const r=await fetch("/api/videos/"+b.dataset.retry+"/retry",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry failed: "+r.status);b.disabled=false}});
+const ra=document.getElementById("retry-all");if(ra)ra.onclick=async()=>{ra.disabled=true;const r=await fetch("/api/videos/retry-all",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry all failed: "+r.status);ra.disabled=false}};
 </script>`);
 }

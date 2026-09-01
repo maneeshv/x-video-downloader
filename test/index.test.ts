@@ -257,6 +257,23 @@ test("watch page carries a Download link to the same file the player uses", asyn
   assert.match(renderWatch(row), /<a[^>]*href="\/v\/1-2\.mp4"[^>]*download="1\.mp4"/);
 });
 
+test("POST /api/videos/retry-all resets every failed row to pending and returns the count; json only", async () => {
+  const a = await seeded();
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
+  await a.store.upsertBookmark(dlRow("22223", { status: "failed", error: "http_403", r2_key: null, bytes: null }));
+  assert.ok((await a.get("/stats")).ok);
+  assert.ok((await (await a.get("/stats")).text()).includes('id="retry-all"'), "button in the failed section");
+  assert.equal((await a.send("/api/videos/retry-all", { method: "POST" })).status, 415, "no content-type");
+  assert.equal((await a.send("/api/videos/retry-all", { method: "GET" })).status, 405);
+  const res = await jsonPost(a, "/api/videos/retry-all", {});
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") ?? "", /^application\/json/);
+  assert.deepEqual(await res.json(), { retried: 2 });
+  assert.equal((await a.store.getBookmark("22222"))!.status, "pending");
+  assert.equal((await a.store.getBookmark("12345"))!.status, "downloaded");
+  assert.deepEqual(await (await jsonPost(a, "/api/videos/retry-all", {})).json(), { retried: 0 });
+});
+
 test("DELETE /api/videos/:id subtracts the row's bytes from status.totalBytes once, clamped at 0", async () => {
   const a = await seeded();
   await a.store.patchStatus({ totalBytes: 12 });
