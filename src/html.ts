@@ -93,10 +93,10 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
   const table = (st: "pending" | "failed") => {
     const rs = rows.filter((r) => r.status === st);
     if (!rs.length) return `<p class="d">None.</p>`;
-    return `<table><tr><th>Post</th><th>${st === "failed" ? "Error" : "Since"}</th><th>Updated</th>${st === "failed" ? "<th></th>" : ""}</tr>${rs.map((r) => `<tr>
+    return `<table><tr><th>Post</th><th>${st === "failed" ? "Error" : "Since"}</th><th>Updated</th>${st === "failed" ? "<th>Size</th><th></th>" : ""}</tr>${rs.map((r) => `<tr>
   <td><a class="snip" href="${url(r.post_url)}">${esc(snippet(r))}</a></td>
   <td class="err">${esc(st === "failed" ? r.error : r.first_seen_at.slice(0, 10))}</td><td class="d">${esc(r.updated_at.slice(0, 16).replace("T", " "))}</td>
-  ${st === "failed" ? `<td><button type="button" data-retry="${esc(r.post_id)}">Retry</button></td>` : ""}
+  ${st === "failed" ? `<td>${mb(r.bytes)}</td><td><button type="button" data-retry="${esc(r.post_id)}">Retry</button></td>` : ""}
 </tr>`).join("")}</table>`;
   };
   const c = status.counts ?? {};
