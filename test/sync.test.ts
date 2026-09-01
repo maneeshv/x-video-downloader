@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "#src/store";
 import { sync, type Deps } from "#src/sync";
-import { MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES } from "#src/limits";
+import { MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, STORAGE_ALERT_STEP_BYTES } from "#src/limits";
 import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, type Scripted } from "./fakes.ts";
 
 const fx = () => fixture("bookmarks.json");
@@ -269,4 +269,35 @@ test("a deleted post is never re-downloaded even though its key is gone from R2 
   assert.equal(b.deleted_at, "2026-08-30T00:00:00Z");
   assert.equal(b.status, "downloaded", "row untouched by the rerun");
   assert.equal(b.updated_at, before_updated, "row untouched by the rerun");
+});
+
+test("storage alert re-fires per STORAGE_ALERT_STEP_BYTES step and re-arms after a decrease", async () => {
+  const GiB = 1024 ** 3, STEP = STORAGE_ALERT_STEP_BYTES; // 3 GiB → steps at 9, 12, 15 GiB
+  const tg: string[] = [];
+  const w = world((url, init) => {
+    if (url.includes("api.telegram.org")) { tg.push(JSON.parse(String(init.body)).text); return { status: 200, body: { ok: true } }; }
+    return routes(fx())(url);
+  });
+  await authed(w.store);
+  // Legacy one-shot key from before the step scheme; 6 bytes short of the 12 GiB step, this run adds 12.
+  await w.store.patchStatus({ totalBytes: 4 * STEP - 6, alerts: { storage: "2026-08-30T12:00:37Z" } });
+  await sync(w.d);
+  let a = (await w.store.getStatus()).alerts ?? {};
+  assert.ok(a["storage:12GB"], "fires for the 12 GiB step");
+  assert.equal(a.storage, undefined, "legacy key retired");
+  assert.match(tg.at(-1)!, /12\.00 GB/);
+  await sync(w.d);
+  assert.equal(tg.length, 1, "same step, no re-fire");
+  await w.store.patchStatus({ totalBytes: 5 * STEP });
+  await sync(w.d);
+  a = (await w.store.getStatus()).alerts ?? {};
+  assert.ok(a["storage:15GB"], "next step fires again");
+  assert.equal(a["storage:12GB"], undefined, "only the current step stays marked");
+  assert.equal(tg.length, 2);
+  await w.store.patchStatus({ totalBytes: 10 * GiB }); // a delete shrank the store
+  await sync(w.d);
+  assert.equal((await w.store.getStatus()).alerts?.["storage:15GB"], undefined, "re-armed below the step");
+  await w.store.patchStatus({ totalBytes: 5 * STEP });
+  await sync(w.d);
+  assert.equal(tg.length, 4, "9 GiB step on the way down, 15 GiB step again on regrowth");
 });
