@@ -83,7 +83,7 @@ document.getElementById("del").onclick=async()=>{if(confirm("Delete this video f
 }
 
 // Stat tiles + tables, no charts: there is no time series to plot, only current counts.
-export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Status, pausedUntil: number): string {
+export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Status, pausedUntil: number, maxFileBytes: number): string {
   const live = stats.filter((r) => !r.deleted);
   const n = (st: string) => live.filter((r) => r.status === st).reduce((a, r) => a + r.n, 0);
   const tile = (key: string, label: string, value: string | number, cls = "") => `<div class="tile"><span class="l">${label}</span><b class="${cls}" data-stat="${key}">${value}</b></div>`;
@@ -108,6 +108,12 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
     ${tile("no_video", "No video", n("no_video"))}${tile("deleted", "Deleted", stats.filter((r) => r.deleted).reduce((a, r) => a + r.n, 0))}
     ${tile("bytes", "Stored", bytes(live.filter((r) => r.status === "downloaded").reduce((a, r) => a + r.bytes, 0)))}
   </div>
+  <h2>Download limit</h2>
+  <form id="max-file-limit" class="row">
+    <label>Maximum file size <input id="max-file-mb" name="maxFileMb" type="number" min="1" max="3072" step="1" value="${maxFileBytes / 1024 ** 2}" required> MB</label>
+    <button type="submit">Save</button><span id="limit-msg"></span>
+  </form>
+  <p class="d">1–3072 MB (3 GB hard maximum). A saved change applies to the next cron or backfill run; retrying failed posts remains a separate action.</p>
   <h2>Health</h2>
   <table>
     <tr><th>Last run</th><td>${esc(status.lastRun ?? "never")}</td></tr>
@@ -130,5 +136,6 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
 <script>
 document.querySelectorAll("[data-retry]").forEach(b=>b.onclick=async()=>{b.disabled=true;const r=await fetch("/api/videos/"+b.dataset.retry+"/retry",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry failed: "+r.status);b.disabled=false}});
 const ra=document.getElementById("retry-all");if(ra)ra.onclick=async()=>{ra.disabled=true;const r=await fetch("/api/videos/retry-all",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry all failed: "+r.status);ra.disabled=false}};
+document.getElementById("max-file-limit").onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector("button"),m=document.getElementById("limit-msg"),mb=Number(f.maxFileMb.value);b.disabled=true;m.textContent="Saving…";const r=await fetch("/api/settings/max-file-bytes",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({maxFileBytes:mb*1024**2})});b.disabled=false;m.textContent=r.ok?"Saved. Applies to the next run.":"Save failed: "+r.status};
 </script>`);
 }
