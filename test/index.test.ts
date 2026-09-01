@@ -251,6 +251,12 @@ test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; 
   assert.equal((await a.send("/api/videos/22222/retry", { method: "GET" })).status, 405);
 });
 
+test("watch page carries a Download link to the same file the player uses", async () => {
+  const { renderWatch } = await import("#src/html");
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  assert.match(renderWatch(row), /<a[^>]*href="\/v\/1-2\.mp4"[^>]*download="1\.mp4"/);
+});
+
 test("POST /api/videos/retry-all resets every failed row to pending and returns the count; json only", async () => {
   const a = await seeded();
   await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null }));

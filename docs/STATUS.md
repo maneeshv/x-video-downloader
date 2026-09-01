@@ -1,6 +1,7 @@
 Updated: 2026-08-31
 
 ## Now
+- **Download link** on the watch page — `<a href="/v/<r2_key>" download="<postId>.mp4">` pill next to Log out; native attribute, no route change (MDN: same-origin suffices). Branch `feat/watch-download-link`, merged with `main` `7be8eeb` and `feat/storage-alert-rearm` `751eb3b` (so it carries #15 + #17 + the alert re-arm) on 2026-08-31; 62/62 tests. **PR not yet opened** — `gh` here is the work account (GOTCHAS); owner opens it from the compare view. Merges last of the four; **not deployed**.
 - **Storage alert re-arms per 3 GiB step** (branch `feat/storage-alert-rearm`, merged with `main` @ `7be8eeb` on 2026-08-31; PR **not yet opened** — `gh` here is the work account, see GOTCHAS; not deployed): `storage:<step>GB` keys (`STORAGE_ALERT_STEP_BYTES`) replace the one-shot `alerts.storage`, every other `storage*` key is cleared each run, so PR #15's decrease-on-delete re-arms it with no extra code. The first post-deploy run will send one `storage:33GB` message for the current 35.91 GB — expected. Contains PR #17 (`feat/stats-retry-all`, merged via `be15e43`). Remaining sibling: `feat/watch-download-link` (merges after this one).
 - **Live = `main` `eb02b42`** (deployed 2026-08-31 as version `3e4ea5ba-00d3-4ca7-92bf-47814c3b3030`; trigger `xrender.uk (custom domain)`, workers.dev 404): `/stats` failed list has a **Size column** and `too_large` failures now record the refused `Content-Length` in `bookmarks.bytes` (PR #13). Verified through Access. The 8 rows that failed before this deploy show a blank Size until retried.
 - **Retry all failed — PR #17 merged to `main` as `716e2e4` on 2026-08-31 (not deployed):** `/stats` gets a **Retry all failed (n)** button → `POST /api/videos/retry-all` → `Store.retryAll()` (one `UPDATE … WHERE status='failed'`, returns `{ retried: n }`). Replaces N clicks / the raw SQL line in `reset-store.md`. ADR-0013 amended. Rebased on `main` `7be8eeb` (PR #15 merged 2026-08-31, not yet deployed — live is still `eb02b42`). 60 tests.
@@ -9,18 +10,18 @@ Updated: 2026-08-31
 - Serving on `https://xrender.uk` (ADR-0012) behind Access; Log out button live (PR #8); work continues on short-lived branches + PRs, CI (`check`) gates them.
 
 ## Next
-1. Owner: open + merge the PR for `feat/storage-alert-rearm` → `main` (https://github.com/maneeshv/x-video-downloader/compare/main...feat/storage-alert-rearm; it already contains PR #17 — merged `origin/feat/stats-retry-all` `be15e43` on 2026-08-31, so no conflicts). Then `feat/watch-download-link`, then say "deploy" once (ADR-0010) — that deploy ships #15 + #17 + both. `gh` here is the work account (GOTCHAS): `gh auth login` as `maneeshv` + `gh auth switch -u maneeshv` would let agents open PRs.
+1. Owner: open + merge the PR for `feat/storage-alert-rearm` → `main` (https://github.com/maneeshv/x-video-downloader/compare/main...feat/storage-alert-rearm; it already contains PR #17 — merged `origin/feat/stats-retry-all` `be15e43` on 2026-08-31, so no conflicts). Then `feat/watch-download-link` (https://github.com/maneeshv/x-video-downloader/compare/main...feat/watch-download-link?expand=1 — already contains `feat/storage-alert-rearm` `751eb3b`, so no conflicts), then say "deploy" once (ADR-0010) — that deploy ships #15 + #17 + both. `gh` here is the work account (GOTCHAS): `gh auth login` as `maneeshv` + `gh auth switch -u maneeshv` would let agents open PRs.
 2. Owner: update the main checkout's gitignored `/Users/maneesh/Developer/personal-project/x-downloader/wrangler.toml` to match `wrangler.toml.example` (`[[routes]]`, `PUBLIC_ORIGIN = https://xrender.uk`). The drift has now tripped **three** worktrees (2026-08-30, 2026-08-31 ×2); the pre-check catches it but only the source fix ends it. Merge the docs PR from `docs/deploy-stats-size`.
 3. Owner (optional, after that deploy): click **Retry all failed** on `https://xrender.uk/stats` for the 8 remaining `too_large` rows — they will fail again (> 1 GB) but now record their size, so the Size column shows how far over the cap each is. Then decide: raise `MAX_FILE_BYTES` again (ADR-0005 amendment) or leave them.
 4. Owner: R2 is at 35.91 GB. Trim with the Delete button if the ≈ $0.39/mo matters; KV `status.totalBytes` decreases on delete since PR #15 (merged 2026-08-31 as `7be8eeb`, not yet deployed); the alert re-arms below a step once `feat/storage-alert-rearm` is in too (D1 `SUM(bytes)` on `/stats` is the truth either way).
-5. Owner: click **Log out** once on `https://xrender.uk` and confirm the Access login page appears (still unexercised).
+5. Owner: click **Log out** once on `https://xrender.uk` and confirm the Access login page appears (still unexercised); click **Download** on a watch page and confirm a `<postId>.mp4` save prompt.
 
 ## Blocked
 - Nothing agent-side.
 
 ## Done recently (last 5; older in JOURNAL)
+- 2026-08-31 Download link on the watch page (branch `feat/watch-download-link`, merged with `main` `7be8eeb` + `feat/storage-alert-rearm` `751eb3b`; 62 tests). PR to be opened by owner (last of four); not deployed.
 - 2026-08-31 Storage alert keyed per 3 GiB step (`STORAGE_ALERT_STEP_BYTES`), ADR-0005 amended; merged `main` `7be8eeb` (PR #15) and `feat/stats-retry-all` `be15e43` (PR #17); 61 tests. Branch pushed, owner opens PR, not deployed.
 - 2026-08-31 "Retry all failed" button + `POST /api/videos/retry-all` (PR #17, merged to `main` as `716e2e4`; 60 tests). Not deployed.
 - 2026-08-31 `DELETE /api/videos/:id` subtracts the row's bytes from KV `totalBytes` (PR #15, merged 2026-08-31 as `7be8eeb`; 58 tests). Not deployed.
 - 2026-08-31 Deployed `main` `eb02b42` as `3e4ea5ba` (Size column + size recording + hooks); `wrangler.toml` drift tripped a third time, caught by the pre-check.
-- 2026-08-31 Session-protocol hooks gate every Stop (ADR-0014; `check-session.sh` takes a BASE ref).
