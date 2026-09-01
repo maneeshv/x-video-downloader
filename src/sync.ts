@@ -69,7 +69,8 @@ function row(it: Item, status: BookmarkStatus, d: Deps, extra: Partial<BookmarkU
   };
 }
 
-type Dl = { ok: true; bytes: number } | { ok: false; status: BookmarkStatus; error: string };
+// `bytes` on a failure = the Content-Length that was refused (too_large), so /stats can show it.
+type Dl = { ok: true; bytes: number } | { ok: false; status: BookmarkStatus; error: string; bytes?: number };
 
 async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
   const res = await d.fetch(v.url);
@@ -78,7 +79,7 @@ async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
   // R2.put needs a known length for streams; an unknown/zero length is refused outright rather
   // than buffered, so a video response can never be read fully into memory before the size check.
   if (!len) return { ok: false, status: "failed", error: "no_length" };
-  if (len > MAX_FILE_BYTES) return { ok: false, status: "failed", error: "too_large" };
+  if (len > MAX_FILE_BYTES) return { ok: false, status: "failed", error: "too_large", bytes: len };
   await d.store.putVideo(v.key, res.body, { postId: it.postId, text: it.text, postUrl: it.postUrl, postedAt: it.postedAt, previewUrl: it.previewUrl, bitRate: v.bitRate });
   return { ok: true, bytes: len };
 }
@@ -113,7 +114,7 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   // record it as downloaded (with the failing video's error) instead of hiding the stored sibling
   // behind a "pending"/"failed" row that never lists it.
   if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, error: fail.error }));
-  if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error }));
+  if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error, bytes: fail.bytes ?? null }));
   return d.store.upsertBookmark(row(it, "pending", d));
 }
 

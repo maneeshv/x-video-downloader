@@ -2,7 +2,7 @@
 export const VERSION = "v2";
 export const MAX_API_REQUESTS_PER_RUN = 3;          // documents the structural bound of one run (1 bookmarks page + ≤2 token calls + ≤2 forced-refresh calls on 401); asserted by tests, not enforced at runtime.
 export const MAX_DOWNLOADS_PER_RUN = 5;             // rest wait for the next tick (ADR-0008)
-export const MAX_FILE_BYTES = 350 * 1024 * 1024;    // spec §5 said 200 MB; owner raised to 350 MB on 2026-08-30 (13/156 test-account videos were over 200 MB) — ADR-0005 amendment
+export const MAX_FILE_BYTES = 1024 ** 3;            // spec §5 said 200 MB; owner raised to 350 MB on 2026-08-30, then to 1 GB on 2026-08-31 (52 real bookmarks failed `too_large`) — ADR-0005 amendments
 export const STORAGE_ALERT_BYTES = 9 * 1024 ** 3;   // alert, keep downloading (owner default Q6)
 export const STORAGE_ALERT_STEP_BYTES = 3 * 1024 ** 3; // re-alert once per 3 GiB step crossed (9, 12, 15 …); 2026-08-31, `alerts.storage` had fired once at 14.56 GB and never again — ADR-0005 amendment
 export const PAUSE_MS_AUTH = 24 * 3600_000;         // 401/403 → pause 24 h
