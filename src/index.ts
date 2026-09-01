@@ -107,9 +107,12 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
       // ponytail: a cron tick between deleteVideos and markDeleted can re-download the object under the tombstone; a repeat DELETE (row is still 'downloaded') cleans it up.
       // R2 first, tombstone second (spec §5): a tombstone must never exist for a video still in R2.
       // A repeat delete is a 204: the row is still `downloaded`, and R2 delete ignores missing keys.
-      if ((await store.getBookmark(id))?.status !== "downloaded") return new Response("not found", { status: 404 });
+      const b = await store.getBookmark(id);
+      if (b?.status !== "downloaded") return new Response("not found", { status: 404 });
       await store.deleteVideos(id);
       await store.markDeleted(id, new Date().toISOString());
+      // Keep the KV storage counter (and the 9 GB alert in sync.ts) honest; only the first delete of a row counts.
+      if (!b.deleted_at) await store.patchStatus({ totalBytes: Math.max(0, ((await store.getStatus()).totalBytes ?? 0) - (b.bytes ?? 0)) });
       return new Response(null, { status: 204 });
     }
     if (req.method === "POST") {

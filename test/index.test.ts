@@ -267,3 +267,16 @@ test("POST /api/videos/retry-all resets every failed row to pending and returns 
   assert.equal((await a.store.getBookmark("12345"))!.status, "downloaded");
   assert.deepEqual(await (await jsonPost(a, "/api/videos/retry-all", {})).json(), { retried: 0 });
 });
+
+test("DELETE /api/videos/:id subtracts the row's bytes from status.totalBytes once, clamped at 0", async () => {
+  const a = await seeded();
+  await a.store.patchStatus({ totalBytes: 12 });
+  await a.send("/api/videos/12345", { method: "DELETE" });
+  assert.equal((await a.store.getStatus()).totalBytes, 7);
+  await a.send("/api/videos/12345", { method: "DELETE" });
+  assert.equal((await a.store.getStatus()).totalBytes, 7, "repeat delete does not subtract again");
+  await a.store.upsertBookmark(dlRow("12346"));
+  await a.store.patchStatus({ totalBytes: 3 });
+  await a.send("/api/videos/12346", { method: "DELETE" });
+  assert.equal((await a.store.getStatus()).totalBytes, 0, "clamped at 0");
+});
