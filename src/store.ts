@@ -106,6 +106,11 @@ export class Store {
     const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE post_id = ? AND status = 'failed'").bind(now, postId).run();
     return r.meta.changes > 0;
   }
+  // Every failed row at once (the /stats "Retry all failed" button); returns how many were reset.
+  async retryAll(now: string): Promise<number> {
+    const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE status = 'failed'").bind(now).run();
+    return r.meta.changes;
+  }
   async updateMeta(postId: string, p: MetaPatch, now: string): Promise<boolean> {
     const sets: string[] = [], args: unknown[] = [];
     if (p.title !== undefined) { sets.push("title = ?"); args.push(p.title || null); }

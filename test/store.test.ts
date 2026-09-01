@@ -150,3 +150,18 @@ test("retry resets a failed row to pending and clears its error; other rows unto
   assert.equal(await s.retry("2", "2026-08-30T00:00:01Z"), false, "downloaded rows are not retried");
   assert.equal(await s.retry("9", "2026-08-30T00:00:01Z"), false, "unknown id");
 });
+
+test("retryAll resets every failed row to pending and returns the count; nothing else touched", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row({ post_id: "1", status: "failed", error: "too_large" }));
+  await s.upsertBookmark(row({ post_id: "2", status: "failed", error: "http_403" }));
+  await s.upsertBookmark(row({ post_id: "3", status: "pending" }));
+  await dl(s, "4");
+  assert.equal(await s.retryAll("2026-08-31T00:00:00Z"), 2);
+  for (const id of ["1", "2"]) {
+    const b = (await s.getBookmark(id))!;
+    assert.deepEqual([b.status, b.error, b.updated_at], ["pending", null, "2026-08-31T00:00:00Z"], id);
+  }
+  assert.equal((await s.getBookmark("4"))!.status, "downloaded");
+  assert.equal(await s.retryAll("2026-08-31T00:00:01Z"), 0, "nothing left to retry");
+});
