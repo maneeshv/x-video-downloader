@@ -1,6 +1,13 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Make saved-video posters durable in private R2
+- Did: implemented the approved durable-poster design: capture an allowlisted X poster after a video exists, store it once as `posters/<postId>` in the existing private bucket, serve it through Access-gated `/p/:postId` with conditional responses and private browser caching, return an application-owned placeholder when absent, delete it with the video's R2 objects, and repair existing rows through bounded keyset `/backfill?posters=N&after=<postId>`. Library and watch rendering use only same-origin poster URLs after cutover.
+- Decided: see ADR-0018. Reused R2, D1 `preview_url`, the existing Access check, and browser caching; added no schema, bucket, dependency, queue, public URL, or poster-specific state.
+- Learned / gotcha: poster capture must also run for downloaded rows that retain a permanent sibling-video error; otherwise the existing early return leaves a playable video's poster dependent on X. Migration completion is based on eligible-row results, not the expected seven request count.
+- Verified: after rebasing onto current `origin/main`, both TypeScript projects and all 83 tests pass.
+- Left undone: production's existing posters are not migrated and production rendering is not cut over; deploy capture/backfill first, follow every `nextAfter` cursor until `null`, reconcile failures, then deploy the same-origin rendering change and verify no `pbs.twimg.com` requests.
+
 ## 2026-09-02 — Sort Library by duration (branch `fix/library-duration-sort`)
 - Did: added Longest and Shortest to the Library sort control, URL allow-list, and `Store.listLibrary()` ordering, mirroring the existing Largest/Smallest file-size sort: order on D1 `duration_ms`, deterministic post ID tie-breaks, unknown durations last in both directions. TDD red first (Store order test plus route/dropdown assertions), then the four-line implementation. All 75 tests pass and both TypeScript projects typecheck.
 - Decided: no ADR, dependency, or migration — the column, sort plumbing, and pattern all already exist. Deferred renaming Largest/Smallest to name their dimension → `docs/QUESTIONS.md`.

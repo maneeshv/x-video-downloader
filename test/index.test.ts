@@ -253,7 +253,8 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.match(h, /href="\/watch\/12345"/);
   assert.match(h, /Aardvark/, "title shown");
   assert.match(h, /hello world/, "text fallback shown when no title");
-  assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "phase one keeps the existing poster source");
+  assert.match(h, /src="\/p\/12345"/, "poster is same-origin");
+  assert.doesNotMatch(h, /pbs\.twimg\.com/, "X poster URL is never rendered");
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
   h = await html("/?sort=oldest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
@@ -319,7 +320,8 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.equal(r.status, 200);
   const h = await r.text();
   assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
-  assert.match(h, /poster="https:\/\/pbs\.twimg\.com\/p\.jpg"/);
+  assert.match(h, /poster="\/p\/12345"/);
+  assert.doesNotMatch(h, /pbs\.twimg\.com/);
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
   assert.match(h, /\/api\/videos\//, "mutation script present");

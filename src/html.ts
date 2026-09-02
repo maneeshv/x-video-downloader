@@ -74,7 +74,7 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   const link = (over: Partial<LibraryQuery>) => libraryHref({ ...q, ...over });
   // ponytail: multi-video posts show the first video only; the others are in R2 as <id>-n.mp4 (rclone gets them).
   const cards = rows.map((r) => `<a class="video-card" id="video-${esc(r.post_id)}" href="${esc(watchHref(r.post_id, q))}" aria-label="Play ${esc(title(r))}">
-  <div class="poster">${r.preview_url ? `<img loading="lazy" src="${url(r.preview_url)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
+  <div class="poster">${r.preview_url ? `<img loading="lazy" src="/p/${esc(r.post_id)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
   <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span><span class="separator">·</span><span>${duration(r.duration_ms)}</span></div></div>
 </a>`).join("\n");
   const sorts = (["newest", "oldest", "title", "largest", "smallest", "longest", "shortest"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
@@ -107,7 +107,7 @@ export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}): string {
   return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`)}
 <main id="content" class="watch-shell">
   <div class="watch-layout">
-    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video></div>
+    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="/p/${esc(r.post_id)}"` : ""}></video></div>
     <section class="watch-panel" aria-labelledby="watch-title">
       <header class="watch-heading"><p class="eyebrow">Library video</p><h1 id="watch-title">${esc(title(r))}</h1><p class="watch-byline">Saved ${esc(day(r))} · ${mb(r.bytes)}</p></header>
       <form id="meta" class="meta-form">
