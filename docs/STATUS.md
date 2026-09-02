@@ -7,17 +7,17 @@ Updated: 2026-09-02
 
 ## Next
 1. Verify the owner Library, watch/edit/favourite, stats/status, retry/settings, backfill, and OAuth-start paths from a working signed-in browser before changing Access.
-2. With explicit owner approval, push the three local commits on `explore/cloudflare-access-identity-injection` to the configured personal GitHub origin.
+2. Open, review, and merge the pushed `explore/cloudflare-access-identity-injection` branch: https://github.com/maneeshv/x-video-downloader/pull/new/explore/cloudflare-access-identity-injection.
 3. Obtain one viewer's exact verified Cloudflare-account email; then execute the existing-app exact-email policy rollout and viewer/non-listed-account tests.
 4. Update the main checkout's gitignored `wrangler.toml` with `OWNER_EMAIL` so new Paseo worktrees do not omit it.
 5. Decide whether the 17 remaining duration-unavailable rows justify R2/MP4 inspection; separately save/retry a higher file limit if wanted.
 
 ## Blocked
-- Access expansion is blocked on authenticated owner verification, at least one friend's exact verified Cloudflare-account email, and a separate non-listed account for the negative test. Publishing the branch is separately blocked on explicit approval to push to `git@github.com-personal:maneeshv/x-video-downloader.git`. The guard is safely deployed meanwhile.
+- Access expansion is blocked on authenticated owner verification, at least one friend's exact verified Cloudflare-account email, and a separate non-listed account for the negative test. The guard is safely deployed and its branch is published meanwhile.
 
 ## Done recently (last 5; older in JOURNAL)
+- 2026-09-02 Published `explore/cloudflare-access-identity-injection` after explicit owner approval; PR creation and merge remain.
 - 2026-09-02 Read-only friend Worker guard deployed as `c0852a7b`; 78 tests and edge checks pass; authenticated owner verification and Access policy change remain.
 - 2026-09-02 Longest/Shortest Library duration sorting deployed as `10f4cb53`; commit `66cd0fb` is carried here pending its separate merge.
 - 2026-09-02 Duration repair deployed and run: 181/198 live Library rows now have duration; 17 remain unavailable.
 - 2026-09-02 Exact-email, owner-versus-viewer Cloudflare Access design approved; ADR-0018 and its implementation plan are frozen.
-- 2026-09-02 Library duration data flow deployed as `3c22564d`; migration applied and Paseo backfill/browser verification completed.
