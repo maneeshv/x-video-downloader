@@ -1,13 +1,16 @@
 import {
   BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS,
-  MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
+  MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES, TWEET_LOOKUP_BATCH_SIZE,
 } from "#src/limits";
 import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
 import { fetchBookmarks, fetchTweetsByIds, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
 
 export type Cfg = OAuthCfg & { publicOrigin: string; telegram?: { token: string; chatId: string } };
 export type Deps = { store: Store; fetch: Fetch; cfg: Cfg; now?: () => number; sleep?: (ms: number) => Promise<void>; random?: () => number };
-export type SyncResult = { skipped?: "paused" | "needs_reauth"; error?: string; pages: number; seen: number; downloaded: number; failed: number; bytes: number };
+export type SyncResult = {
+  skipped?: "paused" | "needs_reauth"; error?: string; pages: number; seen: number; downloaded: number; failed: number; bytes: number;
+  durationBackfill?: { checked: number; updated: number; unavailable: number };
+};
 
 const now = (d: Deps) => (d.now ?? Date.now)();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -139,22 +142,43 @@ async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResu
   return { ...res, error: e.message };
 }
 
-export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: number } = {}): Promise<SyncResult> {
+export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: number; durations?: boolean } = {}): Promise<SyncResult> {
   const res: SyncResult = { pages: 0, seen: 0, downloaded: 0, failed: 0, bytes: 0 };
   if ((await d.store.getPausedUntil()) > now(d)) return { ...res, skipped: "paused" };
 
-  const maxFileBytes = await d.store.getMaxFileBytes();
-  const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
-  const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
-  const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
   let paginationToken: string | undefined, resultCount = 0, sawMedia = false;
-  const hydratedPendingIds = new Set<string>();
   try {
     const access = await ensureAccessToken(d);
-    const userId = await d.store.getUserId();
-    if (!access || !userId) return needsReauth(d, res);
+    if (!access) return needsReauth(d, res);
 
-    const pendingIds = await d.store.listPendingIds(100);
+    if (o.durations) {
+      const missing = await d.store.listMissingDurations(BACKFILL_MAX_ITEMS);
+      let updated = 0;
+      for (let i = 0; i < missing.length; i += TWEET_LOOKUP_BATCH_SIZE) {
+        const batch = missing.slice(i, i + TWEET_LOOKUP_BATCH_SIZE);
+        const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, batch.map((r) => r.post_id)));
+        const byId = new Map(items.map((it) => [it.postId, it]));
+        res.pages++;
+        res.seen += items.length;
+        for (const row of batch) {
+          const durationMs = byId.get(row.post_id)?.videos.find((v) => v.key === row.r2_key)?.durationMs;
+          if (durationMs != null && await d.store.updateDuration(row.post_id, row.r2_key, durationMs)) updated++;
+        }
+      }
+      res.durationBackfill = { checked: missing.length, updated, unavailable: missing.length - updated };
+      await d.store.patchStatus({ lastRun: iso(now(d)), lastError: null, auth: "ok" });
+      for (const k of ["needs_reauth", "api_403", "api_429"]) await clearAlert(d, k);
+      return res;
+    }
+
+    const userId = await d.store.getUserId();
+    if (!userId) return needsReauth(d, res);
+    const maxFileBytes = await d.store.getMaxFileBytes();
+    const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
+    const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
+    const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
+    const hydratedPendingIds = new Set<string>();
+    const pendingIds = await d.store.listPendingIds(TWEET_LOOKUP_BATCH_SIZE);
     if (pendingIds.length > 0) {
       const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, pendingIds));
       for (const it of items) {

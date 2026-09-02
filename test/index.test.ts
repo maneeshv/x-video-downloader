@@ -87,6 +87,35 @@ test("oauth start → callback stores tokens + user id, then backfill and index 
   assert.equal(((await st.json()) as { auth: string }).auth, "ok");
 });
 
+test("duration backfill batches missing downloaded rows without downloading videos", async () => {
+  const a = await app(), id = "1000000000000000004";
+  await a.store.putTokens({ access: "A", refresh: "R", expiresAt: Date.now() + 3600_000 });
+  await a.store.putUserId("u1");
+  await a.store.upsertBookmark(dlRow(id, { duration_ms: null, r2_key: `${id}-2.mp4`, error: "http_404" }));
+  for (let i = 0n; i < 100n; i++) {
+    const missing = String(2_000_000_000_000_000_000n + i);
+    await a.store.upsertBookmark(dlRow(missing, { duration_ms: null }));
+  }
+  await a.store.upsertBookmark(dlRow("3000000000000000001"));
+  await a.store.upsertBookmark(dlRow("3000000000000000002", { status: "pending", duration_ms: null }));
+  await a.store.upsertBookmark(dlRow("3000000000000000003", { duration_ms: null }));
+  await a.store.markDeleted("3000000000000000003", "2026-09-02T00:00:00Z");
+  const before = (await a.store.getBookmark(id))!;
+
+  const res = await a.get("/backfill?durations=1");
+
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json() as { durationBackfill: unknown }).durationBackfill, { checked: 101, updated: 1, unavailable: 100 });
+  const after = (await a.store.getBookmark(id))!;
+  assert.equal(after.duration_ms, 90000, "duration matches the stored second video");
+  assert.equal((await a.store.getBookmark("2000000000000000000"))?.duration_ms, null, "an omitted post stays unknown");
+  assert.deepEqual([after.status, after.error, after.r2_key, after.bytes, after.updated_at], [before.status, before.error, before.r2_key, before.bytes, before.updated_at]);
+  const lookups = a.f.calls.filter(([url]) => url.includes("/tweets?"));
+  assert.deepEqual(lookups.map(([url]) => new URL(url).searchParams.get("ids")!.split(",").length), [100, 1]);
+  assert.equal(a.f.calls.some(([url]) => url.includes("/bookmarks") || url.includes("video.twimg.com")), false);
+  assert.equal(a.r2.objects.size, 0);
+});
+
 test("/v/:key streams from R2 with Range support and rejects bad keys", async () => {
   const a = await app();
   // VIDEO_KEY_RE (src/limits.ts) requires 5-25 digits — a real X post id — so the key

@@ -17,6 +17,7 @@ export type Status = {
 // One row per (status, error, deleted) group; `bytes` sums the group's stored bytes.
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
+export type MissingDuration = { post_id: string; r2_key: string };
 export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
@@ -131,6 +132,18 @@ export class Store {
       .prepare("SELECT post_id FROM bookmarks WHERE status = 'pending' AND deleted_at IS NULL ORDER BY updated_at ASC, post_id ASC LIMIT ?")
       .bind(limit).all<{ post_id: string }>();
     return results.map((r) => r.post_id);
+  }
+  async listMissingDurations(limit: number): Promise<MissingDuration[]> {
+    const { results } = await this.db
+      .prepare("SELECT post_id, r2_key FROM bookmarks WHERE status = 'downloaded' AND duration_ms IS NULL AND r2_key IS NOT NULL AND deleted_at IS NULL ORDER BY post_id LIMIT ?")
+      .bind(limit).all<MissingDuration>();
+    return results;
+  }
+  async updateDuration(postId: string, r2Key: string, durationMs: number): Promise<boolean> {
+    const r = await this.db
+      .prepare("UPDATE bookmarks SET duration_ms = ? WHERE post_id = ? AND r2_key = ? AND status = 'downloaded' AND duration_ms IS NULL AND deleted_at IS NULL")
+      .bind(durationMs, postId, r2Key).run();
+    return r.meta.changes > 0;
   }
   // failed → pending: sync() re-attempts pending rows the next time it sees the post (src/sync.ts processItem).
   async retry(postId: string, now: string): Promise<boolean> {
