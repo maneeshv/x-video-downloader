@@ -104,6 +104,19 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.deepEqual(await ids({ q: "cats" }), ["1"]);
 });
 
+test("countLibrary matches filters and listLibrary returns an offset window", async () => {
+  const { s } = mk();
+  for (let i = 1; i <= 12; i++) await dl(s, String(i), { text: i % 2 ? "cats" : "dogs", posted_at: `2026-08-${String(i).padStart(2, "0")}T00:00:00Z` });
+  await s.updateMeta("11", { favorite: true }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("9", { favorite: true }, "2026-08-30T00:00:00Z");
+  assert.equal(await s.countLibrary(), 12);
+  assert.equal(await s.countLibrary({ q: "cats" }), 6);
+  assert.equal(await s.countLibrary({ q: "cats", fav: true }), 2);
+  assert.deepEqual((await s.listLibrary({}, 3, 4)).map((r) => r.post_id), ["8", "7", "6"]);
+  await s.markDeleted("12", "2026-09-02T00:00:00Z");
+  assert.equal(await s.countLibrary(), 11, "deleted rows leave the count");
+});
+
 test("updateMeta is partial, stores empty strings as NULL, and touches only live downloaded rows", async () => {
   const { s } = mk();
   await dl(s, "1");

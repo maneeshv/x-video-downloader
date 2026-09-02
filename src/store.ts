@@ -17,13 +17,25 @@ export type Status = {
 // One row per (status, error, deleted) group; `bytes` sums the group's stored bytes.
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
-export type LibraryQuery = { q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title" };
+export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
+export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
+export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
+export type LibraryQuery = {
+  q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title";
+  page?: number; perPage?: LibraryPageSize;
+};
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
 export type MetaPatch = { title?: string; description?: string; favorite?: boolean };
 const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   newest: "posted_at DESC, post_id DESC",
   oldest: "posted_at ASC, post_id ASC",
   title: "COALESCE(title, text) COLLATE NOCASE ASC, post_id DESC",
+};
+const libraryFilter = ({ q, fav }: LibraryQuery): { where: string; args: unknown[] } => {
+  const clauses = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
+  if (fav) clauses.push("favorite = 1");
+  if (q) { clauses.push("(title LIKE ? OR description LIKE ? OR text LIKE ?)"); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  return { where: clauses.join(" AND "), args };
 };
 
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
@@ -88,13 +100,16 @@ export class Store {
     return this.db.prepare("SELECT * FROM bookmarks WHERE post_id = ?").bind(postId).first<BookmarkRow>();
   }
   // ponytail: LIKE over ≤800 rows (X's bookmark ceiling, ADR-0007); FTS5 if it ever gets slow.
-  async listLibrary({ q, fav, sort = "newest" }: LibraryQuery = {}, limit = 500): Promise<BookmarkRow[]> {
-    const where = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
-    if (fav) where.push("favorite = 1");
-    if (q) { where.push("(title LIKE ? OR description LIKE ? OR text LIKE ?)"); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  async countLibrary(query: LibraryQuery = {}): Promise<number> {
+    const { where, args } = libraryFilter(query);
+    const row = await this.db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE ${where}`).bind(...args).first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+  async listLibrary(query: LibraryQuery = {}, limit = 500, offset = 0): Promise<BookmarkRow[]> {
+    const { sort = "newest" } = query, { where, args } = libraryFilter(query);
     const { results } = await this.db
-      .prepare(`SELECT * FROM bookmarks WHERE ${where.join(" AND ")} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ?`)
-      .bind(...args, limit).all<BookmarkRow>();
+      .prepare(`SELECT * FROM bookmarks WHERE ${where} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ? OFFSET ?`)
+      .bind(...args, limit, offset).all<BookmarkRow>();
     return results;
   }
   stats(): Promise<StatRow[]> {

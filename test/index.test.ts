@@ -181,14 +181,48 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   h = await html("/?sort=oldest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
   h = await html("/?q=zebra");
-  assert.match(h, /\/watch\/12346"/); assert.doesNotMatch(h, /\/watch\/12345"/);
+  assert.match(h, /\/watch\/12346\?q=zebra"/); assert.doesNotMatch(h, /\/watch\/12345\?q=zebra"/);
   assert.match(h, /value="zebra"/, "search box keeps the query");
   h = await html("/?fav=1");
-  assert.match(h, /\/watch\/12346"/); assert.doesNotMatch(h, /\/watch\/12345"/);
+  assert.match(h, /\/watch\/12346\?fav=1"/); assert.doesNotMatch(h, /\/watch\/12345\?fav=1"/);
   h = await html("/?q=nothing-matches");
-  assert.match(h, /No videos match/);
+  assert.match(h, /No matching videos/);
   await a.send("/api/videos/12346", { method: "DELETE" });
   assert.doesNotMatch(await html("/"), /\/watch\/12346"/, "deleted videos leave the grid");
+});
+
+test("/ paginates by 10, clamps pages, and allows up to 50 videos", async () => {
+  const a = await seeded();
+  for (let id = 12346; id <= 12356; id++) await a.store.upsertBookmark(dlRow(String(id)));
+  const html = async (p: string) => { const r = await a.get(p); assert.equal(r.status, 200, p); return r.text(); };
+  let h = await html("/");
+  assert.equal((h.match(/class="video-card"/g) ?? []).length, 10, "default page size");
+  assert.match(h, /1–10 of 12 videos/);
+  assert.match(h, /name="perPage"/);
+  assert.match(h, /<option value="50">50<\/option>/);
+  assert.match(h, /href="\/\?page=2"/);
+  h = await html("/?page=2");
+  assert.equal((h.match(/class="video-card"/g) ?? []).length, 2);
+  assert.match(h, /11–12 of 12 videos/);
+  h = await html("/?page=999");
+  assert.equal((h.match(/class="video-card"/g) ?? []).length, 2, "out-of-range page clamps to the last page");
+  assert.match(h, /aria-current="page">2<\/a>/);
+  h = await html("/?perPage=50");
+  assert.equal((h.match(/class="video-card"/g) ?? []).length, 12);
+  assert.match(h, /<option value="50" selected>50<\/option>/);
+  h = await html("/?perPage=999");
+  assert.equal((h.match(/class="video-card"/g) ?? []).length, 10, "invalid page size falls back to 10");
+});
+
+test("watch links carry library state and Back to library targets the originating card", async () => {
+  const a = await seeded();
+  for (let id = 12346; id <= 12368; id++) await a.store.upsertBookmark(dlRow(String(id)));
+  const library = await (await a.get("/?q=hello&sort=oldest&page=2&perPage=20")).text();
+  assert.equal((library.match(/class="video-card"/g) ?? []).length, 4);
+  assert.match(library, /href="\/watch\/12365\?q=hello&amp;sort=oldest&amp;page=2&amp;perPage=20"/);
+  const watch = await (await a.get("/watch/12365?q=hello&fav=1&sort=oldest&page=2&perPage=20")).text();
+  assert.match(watch, /href="\/\?q=hello&amp;fav=1&amp;sort=oldest&amp;page=2&amp;perPage=20#video-12365"[^>]*>Back to library<\/a>/);
+  assert.match(watch, /location\.href=backToLibrary/, "delete keeps the originating library state");
 });
 
 test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async () => {
