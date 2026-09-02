@@ -123,6 +123,12 @@ export class Store {
       .bind(...statuses, limit).all<BookmarkRow>();
     return results;
   }
+  async listPendingIds(limit = 100): Promise<string[]> {
+    const { results } = await this.db
+      .prepare("SELECT post_id FROM bookmarks WHERE status = 'pending' AND deleted_at IS NULL ORDER BY updated_at ASC, post_id ASC LIMIT ?")
+      .bind(limit).all<{ post_id: string }>();
+    return results.map((r) => r.post_id);
+  }
   // failed → pending: sync() re-attempts pending rows the next time it sees the post (src/sync.ts processItem).
   async retry(postId: string, now: string): Promise<boolean> {
     const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE post_id = ? AND status = 'failed'").bind(now, postId).run();

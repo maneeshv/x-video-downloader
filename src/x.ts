@@ -121,3 +121,9 @@ export function fetchBookmarks(f: Fetch, access: string, userId: string, o: { ma
   if (o.paginationToken) q.set("pagination_token", o.paginationToken);
   return apiGet<BookmarksResponse>(f, access, `/users/${userId}/bookmarks?${q}`);
 }
+
+export function fetchTweetsByIds(f: Fetch, access: string, ids: string[]): Promise<BookmarksResponse> {
+  const q = new URLSearchParams(BOOKMARK_QUERY);
+  q.set("ids", ids.join(","));
+  return apiGet<BookmarksResponse>(f, access, `/tweets?${q}`);
+}

@@ -3,7 +3,7 @@ import {
   MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
 } from "#src/limits";
 import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
-import { fetchBookmarks, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
+import { fetchBookmarks, fetchTweetsByIds, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
 
 export type Cfg = OAuthCfg & { publicOrigin: string; telegram?: { token: string; chatId: string } };
 export type Deps = { store: Store; fetch: Fetch; cfg: Cfg; now?: () => number; sleep?: (ms: number) => Promise<void>; random?: () => number };
@@ -147,10 +147,20 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
   const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
   const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
   let paginationToken: string | undefined, resultCount = 0, sawMedia = false;
+  const hydratedPendingIds = new Set<string>();
   try {
     const access = await ensureAccessToken(d);
     const userId = await d.store.getUserId();
     if (!access || !userId) return needsReauth(d, res);
+
+    const pendingIds = await d.store.listPendingIds(100);
+    if (pendingIds.length > 0) {
+      const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, pendingIds));
+      for (const it of items) {
+        hydratedPendingIds.add(it.postId);
+        await processItem(d, it, res, budget, maxFileBytes);
+      }
+    }
 
     for (let page = 0; page < maxPages; page++) {
       const body = await fetchBookmarks(d.fetch, access, userId, { maxResults: pageSize, paginationToken });
@@ -160,7 +170,7 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
       res.seen += items.length;
       for (const it of items) {
         sawMedia ||= it.hasVideoMedia;
-        await processItem(d, it, res, budget, maxFileBytes);
+        if (!hydratedPendingIds.has(it.postId)) await processItem(d, it, res, budget, maxFileBytes);
       }
       paginationToken = body.meta?.next_token;
       if (!paginationToken || res.seen >= BACKFILL_MAX_ITEMS) break;
