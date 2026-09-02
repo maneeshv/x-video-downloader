@@ -167,6 +167,13 @@ Do this as two deployments so X-backed rendering remains intact while existing p
 Rollback either deploy with the normal Worker rollback below. Rolling back the rendering cutover
 restores X URLs; poster objects already copied to private R2 are harmless and can remain for retry.
 
+Executed 2026-09-02: phase one was `4c07dca3-7b47-4d35-8cae-38205aa9e0d0`; seven authenticated
+Paseo-browser batches stored all 198 eligible posters with no unavailable sources or failures; and
+the same-origin cutover is `8df14d41-e59d-4f7e-b8b8-95d302efebe3` at 100%. First/last Library
+pages and Watch were checked with non-zero poster dimensions and no `pbs.twimg.com` requests.
+Use phase one for a rendering-only rollback or `c0852a7b-a9b7-49b4-a4d3-b83682928919` for a full
+pre-feature rollback.
+
 ### 10. Verify the cron
 After ≤30 minutes, dashboard → Worker → **Cron Events** shows a successful invocation, and
 `${PUBLIC_ORIGIN}/status` `lastRun` has advanced. Check console.x.com → usage: a handful of reads

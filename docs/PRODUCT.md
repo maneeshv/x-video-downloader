@@ -1,6 +1,6 @@
 # Product: x-downloader
 
-Updated: 2026-09-02 (durable private posters added locally; not deployed or migrated)
+Updated: 2026-09-02 (durable private R2 posters deployed; 198/198 eligible posters migrated)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.
