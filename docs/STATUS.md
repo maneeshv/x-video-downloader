@@ -7,13 +7,13 @@ Updated: 2026-09-02
 
 ## Next
 1. Verify the owner Library, watch/edit/favourite, stats/status, retry/settings, backfill, and OAuth-start paths from a working signed-in browser before changing Access.
-2. Obtain one viewer's exact verified Cloudflare-account email; then execute the existing-app exact-email policy rollout and viewer/non-listed-account tests.
-3. Update the main checkout's gitignored `wrangler.toml` with `OWNER_EMAIL` so new Paseo worktrees do not omit it.
-4. Decide whether the 17 remaining duration-unavailable rows justify R2/MP4 inspection.
-5. Save the desired operating file limit on `/stats` and explicitly retry/backfill old `too_large` rows if wanted.
+2. With explicit owner approval, push the three local commits on `explore/cloudflare-access-identity-injection` to the configured personal GitHub origin.
+3. Obtain one viewer's exact verified Cloudflare-account email; then execute the existing-app exact-email policy rollout and viewer/non-listed-account tests.
+4. Update the main checkout's gitignored `wrangler.toml` with `OWNER_EMAIL` so new Paseo worktrees do not omit it.
+5. Decide whether the 17 remaining duration-unavailable rows justify R2/MP4 inspection; separately save/retry a higher file limit if wanted.
 
 ## Blocked
-- Access expansion is blocked on authenticated owner verification, at least one friend's exact verified Cloudflare-account email, and a separate non-listed account for the negative test. The guard is safely deployed meanwhile.
+- Access expansion is blocked on authenticated owner verification, at least one friend's exact verified Cloudflare-account email, and a separate non-listed account for the negative test. Publishing the branch is separately blocked on explicit approval to push to `git@github.com-personal:maneeshv/x-video-downloader.git`. The guard is safely deployed meanwhile.
 
 ## Done recently (last 5; older in JOURNAL)
 - 2026-09-02 Read-only friend Worker guard deployed as `c0852a7b`; 78 tests and edge checks pass; authenticated owner verification and Access policy change remain.
