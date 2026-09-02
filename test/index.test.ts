@@ -8,7 +8,7 @@ import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, makeSigner, type Scripted }
 const TEAM = "https://team.cloudflareaccess.com", AUD = "aud1", ORIGIN = "https://w.example";
 const fixtureJson = fixture("bookmarks.json");
 
-async function app() {
+async function app(ownerEmail = "o@example.com") {
   const kv = new FakeKV(), r2 = new FakeR2(), d1 = new FakeD1();
   // access.ts's JWKS cache is keyed by team domain + kid; distinct kids per app() instance
   // avoid a stale-key collision when this file's tests share the module-level cache.
@@ -25,15 +25,17 @@ async function app() {
     if (url.includes("pbs.twimg.com")) return { status: 200, bodyBytes: new Uint8Array([0xff, 0xd8]), headers: { "content-type": "image/jpeg", "content-length": "2" } };
     return { status: 200, bodyBytes: new Uint8Array([1, 2, 3]), headers: { "content-type": "video/mp4", "content-length": "3" } };
   });
-  const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
-  const jwt = await signer.sign({ aud: [AUD], iss: TEAM, exp: Date.now() / 1000 + 60, email: "o@example.com" });
+  const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, OWNER_EMAIL: ownerEmail, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
+  const jwtFor = (email?: string) => signer.sign({ aud: [AUD], iss: TEAM, exp: Date.now() / 1000 + 60, ...(email === undefined ? {} : { email }) });
+  const jwt = await jwtFor("o@example.com"), viewerJwt = await jwtFor("v@example.com");
   // Regression: Workers/undici throw "Illegal invocation" when fetch is called as a method of another
   // object (`deps.fetch(url)`), so every internal caller must invoke it unbound.
   const strict = function (this: unknown, ...args: Parameters<typeof f>) { assert.equal(this, undefined, "fetch called with a bound this"); return f(...args); };
-  const get = (path: string, headers: Record<string, string> = {}) => handle(new Request(ORIGIN + path, { headers: { "cf-access-jwt-assertion": jwt, ...headers } }), env, strict as typeof f);
-  const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
-    handle(new Request(ORIGIN + path, { ...init, headers: { "cf-access-jwt-assertion": jwt, ...(init.headers ?? {}) } }), env, strict as typeof f);
-  return { env, f, get, send, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
+  const as = (token: string, path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
+    handle(new Request(ORIGIN + path, { ...init, headers: { "cf-access-jwt-assertion": token, ...(init.headers ?? {}) } }), env, strict as typeof f);
+  const get = (path: string, headers: Record<string, string> = {}) => as(jwt, path, { headers });
+  const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) => as(jwt, path, init);
+  return { env, f, get, send, as, jwt, viewerJwt, jwtFor, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
 }
 
 const dlRow = (post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
@@ -58,6 +60,57 @@ test("every route is 403 without a valid Access JWT", async () => {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
   assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
+});
+
+test("viewer can only browse, watch, stream, and load posters; owner-only and future routes are 403", async () => {
+  const a = await seeded();
+  for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/p/12345"]) {
+    assert.equal((await a.as(a.viewerJwt, path)).status, 200, path);
+  }
+  const ranged = await a.as(a.viewerJwt, "/v/12345.mp4", { headers: { range: "bytes=1-2" } });
+  assert.equal(ranged.status, 206);
+  for (const path of [
+    "/stats", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/future",
+    "/api/videos/retry-all", "/api/settings/max-file-bytes", "/api/videos/12345", "/api/videos/12345/retry",
+  ]) assert.equal((await a.as(a.viewerJwt, path)).status, 403, path);
+  assert.equal((await a.as(a.viewerJwt, "/", { method: "POST" })).status, 403, "POST viewer route");
+  assert.equal((await a.as(a.viewerJwt, "/api/videos/12345", { method: "DELETE" })).status, 403, "DELETE");
+});
+
+test("owner identity is trimmed and case-insensitive; missing identity/configuration fails closed", async () => {
+  const a = await app(" O@EXAMPLE.COM ");
+  assert.equal((await a.get("/status")).status, 200, "normalized owner email");
+
+  const blankOwner = await app("   ");
+  assert.equal((await blankOwner.get("/status")).status, 403, "blank owner grants no owner access");
+  assert.equal((await blankOwner.get("/")).status, 200, "blank owner does not block valid viewers");
+
+  for (const email of [undefined, "   "]) {
+    const token = await a.jwtFor(email);
+    for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/stats", "/status", "/oauth/start", "/oauth/callback", "/backfill", "/api/videos/12345"]) {
+      assert.equal((await a.as(token, path)).status, 403, `${String(email)} ${path}`);
+    }
+  }
+
+  const missingOwner = { ...a.env } as Partial<AppEnv>;
+  delete missingOwner.OWNER_EMAIL;
+  assert.equal((await handle(new Request(`${ORIGIN}/status`, { headers: { "cf-access-jwt-assertion": a.jwt } }), missingOwner as AppEnv, a.f)).status, 403);
+});
+
+test("viewer HTML is visibly read-only and contains no owner controls or scripts", async () => {
+  const a = await seeded();
+  await a.store.updateMeta("12345", { title: "Shared", description: "Viewer <description>", favorite: true }, "2026-09-02T00:00:00Z");
+  await a.store.patchStatus({ auth: "needs_reauth" });
+  const library = await (await a.as(a.viewerJwt, "/")).text();
+  assert.match(library, /View only/);
+  assert.doesNotMatch(library, /href="\/stats"|href="\/oauth\/start"/);
+
+  const watch = await (await a.as(a.viewerJwt, "/watch/12345")).text();
+  assert.match(watch, /View only/);
+  assert.match(watch, /Viewer &lt;description&gt;/);
+  assert.doesNotMatch(watch, /Viewer <description>/);
+  assert.doesNotMatch(watch, /id="meta"|id="fav"|id="del"|\/api\/videos\/|<script>/);
+  assert.match(watch, /download/);
 });
 
 test("oauth start → callback stores tokens + user id, then backfill and index work", async () => {
@@ -325,6 +378,7 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
   assert.match(h, /\/api\/videos\//, "mutation script present");
+  assert.doesNotMatch(h, /View only/, "owner is not labelled read-only");
   await a.store.upsertBookmark(dlRow("12347", { status: "pending", r2_key: null }));
   assert.equal((await a.get("/watch/12347")).status, 404, "pending");
   assert.equal((await a.get("/watch/99999")).status, 404, "unknown");

@@ -12,7 +12,10 @@ grep -v -E '^\s*(#|$)' wrangler.toml.example | grep -v -E '^(id|database_id) =' 
 grep -v -E '^\s*(#|$)' wrangler.toml         | grep -v -E '^(id|database_id) =' > "$TMPDIR/b"
 diff "$TMPDIR/a" "$TMPDIR/b"
 ```
-Expect no output apart from the real `TEAM_DOMAIN`/`POLICY_AUD` values. Any `routes`/`PUBLIC_ORIGIN`/`[vars]` difference: copy the example's lines into `wrangler.toml` before `npx wrangler deploy`. After deploying, the printed triggers must list `xrender.uk (custom domain)` — a bare workers.dev URL means the config was stale.
+Expect no output apart from the real `TEAM_DOMAIN`/`POLICY_AUD`/`OWNER_EMAIL` values. Any
+`routes`/`PUBLIC_ORIGIN`/`[vars]` difference: copy the example's lines into `wrangler.toml` before
+`npx wrangler deploy`. After deploying, the printed triggers must list `xrender.uk (custom domain)` —
+a bare workers.dev URL means the config was stale.
 
 ## Steps executed 2026-08-30 (agent, Task 9 part)
 
@@ -71,9 +74,11 @@ so curl says "Could not resolve host" / hangs and Chrome (incl. the Paseo tab) l
 time by not resolving the name before `wrangler deploy` finishes.
 History: 2026-08-30 08:xx–17:xx the origin was `https://x-downloader.x-downloader.workers.dev`.
 
-### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`) — done 2026-08-30 (values in step 6)
+### 4. Set vars (`TEAM_DOMAIN`, `POLICY_AUD`, `PUBLIC_ORIGIN`, `OWNER_EMAIL`)
 Edit `wrangler.toml` `[vars]` directly, then `npx wrangler deploy`. `PUBLIC_ORIGIN` is already set
-(step 3); `TEAM_DOMAIN`/`POLICY_AUD` need Access enabled first (step 6 below).
+(step 3); `TEAM_DOMAIN`/`POLICY_AUD` need Access enabled first (step 6 below). `OWNER_EMAIL` is the
+verified Cloudflare Login address that receives owner capabilities. Missing or blank fails closed:
+authenticated users remain viewers and every owner-only route returns 403.
 
 ### 5. Secrets
 ```bash
@@ -95,7 +100,7 @@ Done 2026-08-30: `TELEGRAM_BOT_TOKEN`. Remaining (owner-blocked, see `docs/STATU
 
 ## Owner steps (not run 2026-08-30)
 
-### 6. Enable Cloudflare Access on the Worker
+### 6. Enable Cloudflare Access and admit exact-email viewers
 (Done 2026-08-30 on the workers.dev route; the app is Worker-scoped, "All traffic", so it covered
 `xrender.uk` automatically with the same AUD when the custom domain was added — verified by the
 302 in step 3. Nothing to redo for a hostname change.)
@@ -104,7 +109,7 @@ Routes**) → **Production** workers.dev row → the **Enable Access →** link 
 Worker's **Access** tab → the auto-created
 policy `x-downloader - Production` → set the policy as described below. Sources: Cloudflare
 changelog 2025-10-03 (one-click Access), 2025-12-03 (reusable `<worker> - Production` policy), 2026-05-14 (Domains tab).
-Then **Zero Trust → Access → Applications →** the app created for this route → copy the
+Then **Zero Trust → Access controls → Applications →** the app created for this route → copy the
 **Application Audience (AUD) Tag**. The team domain is `https://<team>.cloudflareaccess.com`
 (shown in Zero Trust → Settings → Custom Pages, or the URL of the Zero Trust dashboard itself).
 Put both into `wrangler.toml` `[vars] TEAM_DOMAIN` / `POLICY_AUD`, then `npx wrangler deploy`.
@@ -112,11 +117,32 @@ Done 2026-08-30: `TEAM_DOMAIN = "https://orange-sky-811f.cloudflareaccess.com"`,
 `POLICY_AUD = "51d1e95c9f203c9af5c21913bcaf90c001acd25aa195221228229ea0f3ede47c"` (both public — they appear in the
 Access login redirect — so recorded here for rebuilding `wrangler.toml`). Verified: `curl -si …/status` → `HTTP/2 302`
 to `<TEAM_DOMAIN>/cdn-cgi/access/login/…?kid=<POLICY_AUD>`. In the dialog, choose Scope **All traffic** (default is
-Previews only, which leaves production public). Policy as deployed: **Cloudflare account members** (Allow) — this
-selector only matches logins through the **Cloudflare** identity provider, so under Zero Trust → Access controls →
-Applications → `x-downloader - Cloudflare Workers` → login methods, enable **Cloudflare** and disable One-time PIN
-(the Worker's quick dialog only offers *Email domain*, which would admit all of gmail.com; the full-address *Emails*
-selector lives in Zero Trust → Access controls → Policies if ever needed).
+Previews only, which leaves production public). Under **Zero Trust → Access controls → Applications →
+`x-downloader - Cloudflare Workers` → Login methods**, enable **Cloudflare** and disable One-time PIN.
+
+For the read-only-viewer rollout (ADR-0019), order is mandatory:
+
+1. Deploy the Worker with the verified `OWNER_EMAIL` while the existing **Cloudflare account members**
+   policy still admits only the owner. Verify Library, watch, metadata save, favourite, delete using a
+   disposable item if available, retry, file-limit save, backfill, status, and X reauthorization.
+2. Audit every other Access application that uses Cloudflare Login. The identity-provider setting below
+   is account-wide, so each affected application must already have a narrow policy.
+3. Under **Zero Trust → Integrations → Identity providers → Cloudflare → Configure**, disable
+   **Restrict to account members**. Current dashboard reference:
+   https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/cloudflare/.
+4. Edit the existing x-downloader Access application; do not create another application or change its
+   AUD. Replace the **Cloudflare account members** Include with one exact **Emails** Include containing
+   only the owner. Do not append a broader selector or add a second Allow policy. Verify the owner in a
+   fresh session.
+5. The viewer creates their own free Cloudflare account and verifies its email; do not invite them to
+   the owner's Cloudflare account or grant a dashboard role. Add that exact email to the policy, then
+   send `https://xrender.uk` to the viewer manually—Access does not send an application invitation.
+   Verify `/`, `/watch/:id`, `/v/:key` including download, and `/p/:id`; directly verify `/stats`, `/status`,
+   `/oauth/start`, `/oauth/callback`, `/backfill`, and `/api/*` return 403 and owner controls are absent.
+6. Verify a non-listed Cloudflare account is rejected at the Access screen, then add remaining viewers.
+
+The full-address **Emails** selector is in Zero Trust → Access controls → Policies; the Worker's quick
+dialog may only offer **Email domain**, which would be too broad.
 
 ### 7. X app callback URL
 In console.x.com, the app's **User authentication settings** callback URL must be exactly
@@ -181,6 +207,10 @@ per day, not hundreds (spec assumption; see `docs/GOTCHAS.md` "Owned Reads" line
 surprising).
 
 ## Rollback
+- Bad friend admission: remove viewer emails, revoke their active Access sessions, restore **Restrict
+  to account members**, and restore the former **Cloudflare account members** policy. The Worker guard
+  can remain deployed. Removing a policy email without session revocation may not cut off an active
+  session immediately.
 - Bad deploy: `npx wrangler deployments list` then `npx wrangler rollback [--version-id <id>]`.
 - Bad migration: D1 migrations are additive-only in this repo (no down-migrations written yet); fix
   forward with a new numbered migration file.

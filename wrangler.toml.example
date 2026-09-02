@@ -16,6 +16,7 @@ custom_domain = true
 TEAM_DOMAIN = "https://<team>.cloudflareaccess.com"   # Zero Trust team domain
 POLICY_AUD = "<aud-tag-of-the-access-application>"
 PUBLIC_ORIGIN = "https://xrender.uk"   # exact Worker origin; the OAuth callback URL is derived from it
+OWNER_EMAIL = "<owner-cloudflare-email>"   # verified Cloudflare Login email; all other admitted emails are read-only
 
 [[r2_buckets]]
 binding = "VIDEOS"

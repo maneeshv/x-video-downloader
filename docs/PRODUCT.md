@@ -1,12 +1,14 @@
 # Product: x-downloader
 
-Updated: 2026-09-02 (durable private R2 posters deployed; 198/198 eligible posters migrated)
+Updated: 2026-09-02 (durable private R2 posters deployed; read-only friend branch integration pending)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.
 
 ## User
-One person: the owner, using their own X account and bookmarks. The project may be open-sourced so others can deploy their own single-user instance. **Multi-tenancy is a non-goal.**
+One owner, using their own X account and bookmarks, plus a small exact-email list of trusted read-only
+viewers. The project may be open-sourced so others can deploy their own instance. **Multi-tenancy and
+viewer-owned data are non-goals.**
 
 ## Core flow
 1. Owner bookmarks a video post in X (any client).
@@ -18,6 +20,9 @@ One person: the owner, using their own X account and bookmarks. The project may 
    library restores the originating query, page, and card position. Library cards and watch pages
    use same-origin, Access-gated posters rather than depending on X's CDN (ADR-0011, ADR-0016,
    ADR-0018).
+5. An exact-email viewer can browse, load posters, watch, and download the complete library but
+   cannot reach metadata, delete, retry, settings, status, X OAuth, or backfill capabilities
+   (ADR-0019).
 
 ## Constraints (from the owner, 2026-08-29)
 - Runs **entirely in the cloud**: scheduling, downloading, storage. No home server, no laptop dependency.
@@ -28,10 +33,10 @@ One person: the owner, using their own X account and bookmarks. The project may 
 - Open-source-ready: no secrets in the repo, clone-and-deploy instructions, nothing account-specific hardcoded.
 
 ## Non-goals
-- Multi-user / SaaS. Design for one account.
+- Multi-tenant / SaaS operation, viewer-owned libraries, or roles beyond one owner and read-only viewers.
 - Archiving arbitrary images, threads, or text. The one poster used by each saved video's UI is the
   only image copied (ADR-0018); GIF-as-mp4 remains a video because X serves it as mp4.
-- Transcoding, thumbnail generation, multi-user dashboards.
+- Transcoding, thumbnail generation, or viewer dashboards.
 - Tagging, bulk actions, undo, un-bookmarking on X. (Search/filter/favourite/title/description/delete shipped 2026-08-30 — spec `2026-08-30-video-library-design.md`, ADR-0011.)
 - Automating the X login (username/password/2FA). The owner supplies a session; the tool never logs in.
 - Re-hosting or sharing videos publicly.
