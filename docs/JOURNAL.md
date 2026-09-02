@@ -7,6 +7,12 @@ Append-only, newest first. Template in `docs/STANDARDS.md`.
 - Learned / gotcha: sandboxed Wrangler reported both a log-file EPERM and a misleading unauthenticated state because it could not read the existing macOS credential context; the unsandboxed command confirmed the login. This is already encoded in `docs/runbooks/agent-setup.md` and the existing Wrangler sandbox GOTCHA, so no new GOTCHAS entry was added.
 - Left undone: deploy the guard while Access remains account-members-only, verify owner behavior, then obtain viewer emails and execute the exact-email Access rollout plus negative-account test.
 
+## 2026-09-02 — Sort Library by duration (branch `fix/library-duration-sort`)
+- Did: added Longest and Shortest to the Library sort control, URL allow-list, and `Store.listLibrary()` ordering, mirroring the existing Largest/Smallest file-size sort: order on D1 `duration_ms`, deterministic post ID tie-breaks, unknown durations last in both directions. TDD red first (Store order test plus route/dropdown assertions), then the four-line implementation. All 75 tests pass and both TypeScript projects typecheck.
+- Decided: no ADR, dependency, or migration — the column, sort plumbing, and pattern all already exist. Deferred renaming Largest/Smallest to name their dimension → `docs/QUESTIONS.md`.
+- Learned / gotcha: the owner's "duration sort is broken" report was a labeling mismatch, not a bug — "Smallest" sorts by file size (bytes), and bitrate variance makes that order look shuffled when reading the duration badges. Root cause was a missing feature plus ambiguous labels, encoded in the QUESTIONS line; nothing to promote to GOTCHAS.
+- Left undone: not pushed, merged, or deployed.
+
 ## 2026-09-02 — Approve read-only friend access design and prepare execution
 - Did: recorded the owner's approval, froze `docs/superpowers/specs/2026-09-02-read-only-friend-access-design.md`, added ADR-0018, wrote the code-first implementation/rollout plan, and updated PRODUCT's approved scope. No product code, Worker configuration, Cloudflare policy, deployment, or production data changed. The prior full repository check remains green at 74 tests; the documentation-only session check passes.
 - Decided: ADR-0018 supersedes ADR-0004 only where its email-OTP/single-user assumption prevented exact-email read-only viewers. Cloudflare Login, private R2, and in-Worker JWT validation remain.
