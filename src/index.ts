@@ -1,8 +1,8 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex, renderStats, renderWatch } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
-import { sync, type Deps } from "#src/sync";
+import { backfillPosters, sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
 
 export type AppEnv = {
@@ -24,6 +24,7 @@ function deps(env: AppEnv, f: Fetch): Deps {
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 const html = (s: string) => new Response(s, { headers: { "content-type": "text/html; charset=utf-8" } });
+const POSTER_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><rect width="16" height="9" fill="#171b21"/><path d="m6.5 3 4 1.5v.5l-4 1.5z" fill="#59616d"/></svg>`;
 
 // R2 (and miniflare) populate obj.range unconditionally on a GET — even a plain request
 // gets {offset: 0, length: size} back — so whether to answer 206 must come from the request,
@@ -68,6 +69,23 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
   return new Response(obj.body, { status: 200, headers });
 }
 
+async function poster(store: Store, postId: string, req: Request): Promise<Response> {
+  if (!POST_ID_RE.test(postId)) return new Response("not found", { status: 404 });
+  const obj = await store.getPoster(postId, req.headers);
+  const headers = new Headers({ "x-content-type-options": "nosniff" });
+  if (!obj) {
+    headers.set("content-type", "image/svg+xml");
+    headers.set("cache-control", "no-store");
+    return new Response(POSTER_PLACEHOLDER, { headers });
+  }
+  obj.writeHttpMetadata(headers);
+  headers.set("etag", obj.httpEtag);
+  headers.set("content-length", String(obj.size));
+  headers.set("cache-control", "private, max-age=31536000, immutable");
+  if (!("body" in obj)) return new Response(null, { status: req.headers.has("if-none-match") || req.headers.has("if-modified-since") ? 304 : 412, headers });
+  return new Response(obj.body, { headers });
+}
+
 // Body → MetaPatch, or null when it is not an object, has a wrongly-typed field, or names no field.
 function parseMetaPatch(b: unknown): MetaPatch | null {
   if (!b || typeof b !== "object") return null;
@@ -104,7 +122,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   }
   catch { return new Response("forbidden", { status: 403 }); }
   const isOwner = !!env.OWNER_EMAIL?.trim() && email.toLowerCase() === env.OWNER_EMAIL.trim().toLowerCase();
-  const viewerPath = url.pathname === "/" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/v\/[^/]+$/.test(url.pathname);
+  const viewerPath = url.pathname === "/" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/(?:v|p)\/[^/]+$/.test(url.pathname);
   if (!isOwner && (req.method !== "GET" || !viewerPath)) return new Response("forbidden", { status: 403 });
 
   const d = deps(env, f);
@@ -179,6 +197,8 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     catch { return new Response("not found", { status: 404 }); }
     return video(store, key, req);
   }
+  const posterRoute = /^\/p\/([^/]+)$/.exec(url.pathname);
+  if (posterRoute) return poster(store, posterRoute[1]!, req);
   if (url.pathname === "/stats") {
     return html(renderStats(await store.stats(), await store.listByStatus(["pending", "failed"]), await store.getStatus(), await store.getPausedUntil(), await store.getMaxFileBytes()));
   }
@@ -201,6 +221,14 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   }
   if (url.pathname === "/backfill") {
     if (url.searchParams.get("durations") === "1") return json(await sync(d, { durations: true }));
+    const rawPosters = url.searchParams.get("posters"), after = url.searchParams.get("after");
+    if (rawPosters !== null) {
+      if (url.searchParams.has("downloads") || (after !== null && !POST_ID_RE.test(after))) return new Response("bad request", { status: 400 });
+      const n = Number(rawPosters);
+      if (!Number.isInteger(n)) return new Response("bad request", { status: 400 });
+      return json(await backfillPosters(d, Math.min(Math.max(1, n), BACKFILL_MAX_POSTERS), after));
+    }
+    if (after !== null) return new Response("bad request", { status: 400 });
     // ?downloads=N lets the owner drain a backlog faster than the cron's per-run cap; clamped to a hard ceiling.
     const n = Number(url.searchParams.get("downloads")) || MAX_DOWNLOADS_PER_RUN;
     return json(await sync(d, { backfill: true, maxDownloads: Math.min(Math.max(1, n), BACKFILL_MAX_DOWNLOADS) }));

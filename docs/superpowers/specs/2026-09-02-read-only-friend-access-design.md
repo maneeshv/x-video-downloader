@@ -3,7 +3,7 @@
 Date: 2026-09-02 | Status: APPROVED 2026-09-02 by the owner (frozen; changes require a new dated spec)
 
 Evidence: `docs/research/2026-09-02-cloudflare-access-read-only-viewers.md`
-Decision: ADR-0018 (supersedes ADR-0004 in part)
+Decision: ADR-0019 (supersedes ADR-0004 in part)
 
 ## Problem
 
@@ -35,7 +35,7 @@ Worker JWT verification
         |
         +---- OWNER_EMAIL match --> all existing routes
         |
-        `---- other email -------> GET /, /watch/:id, /v/:key only
+        `---- other email -------> GET /, /watch/:id, /v/:key, /p/:id only
 ```
 
 No WorkOS integration, friend database, role table, invitation UI, or new dependency is added.
@@ -72,6 +72,7 @@ spend money: `/oauth/start`, `/oauth/callback`, and `/backfill`.
 | `GET /` | yes | yes | Browse, search, filter, sort, and paginate |
 | `GET /watch/:postId` | yes | yes | Watch one downloaded video and read its metadata |
 | `GET /v/:key` including Range requests | yes | yes | Stream or download the video bytes |
+| `GET /p/:postId` | yes | yes | Load the video's private same-origin poster |
 | `GET /stats` | yes | no | Operational details and recovery controls |
 | `GET /status` | yes | no | Internal sync, auth, and X-account state |
 | `GET /oauth/start`, `GET /oauth/callback` | yes | no | Writes PKCE state and X credentials |
@@ -91,8 +92,8 @@ Server authorization is authoritative; hiding controls is only a clear, honest v
 
 - The owner sees the current Library, Stats, Re-authorize, metadata, favourite, delete, retry,
   settings, backfill, and download controls unchanged.
-- A viewer sees search, filters, sorting, pagination, the watch page, original-post link, streaming,
-  download, and logout.
+- A viewer sees search, filters, sorting, pagination, same-origin posters, the watch page,
+  original-post link, streaming, download, and logout.
 - A viewer does not receive the Stats or Re-authorize navigation, metadata form, favourite control,
   delete control, mutation JavaScript, or any operational page.
 - The shared header shows a small `View only` label so the absence of controls is understandable.
@@ -131,8 +132,8 @@ members** and the prior account-member policy. The code-side owner guard can rem
 ## Acceptance criteria
 
 1. A valid owner JWT retains every current route and capability.
-2. A valid viewer JWT receives `200` for the Library, watch page, and video stream, including Range
-   requests, and `403` for every other current route.
+2. A valid viewer JWT receives `200` for the Library, watch page, poster, and video stream, including
+   Range requests, and `403` for every other current route.
 3. No JWT, an invalid JWT, or a valid JWT without a non-empty email receives no application content.
 4. Missing or empty `OWNER_EMAIL` cannot grant owner capability; email comparison is case-insensitive.
 5. Viewer HTML contains no owner navigation, mutation form, mutation controls, or mutation script and

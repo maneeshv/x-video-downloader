@@ -120,7 +120,7 @@ to `<TEAM_DOMAIN>/cdn-cgi/access/login/…?kid=<POLICY_AUD>`. In the dialog, cho
 Previews only, which leaves production public). Under **Zero Trust → Access controls → Applications →
 `x-downloader - Cloudflare Workers` → Login methods**, enable **Cloudflare** and disable One-time PIN.
 
-For the read-only-viewer rollout (ADR-0018), order is mandatory:
+For the read-only-viewer rollout (ADR-0019), order is mandatory:
 
 1. Deploy the Worker with the verified `OWNER_EMAIL` while the existing **Cloudflare account members**
    policy still admits only the owner. Verify Library, watch, metadata save, favourite, delete using a
@@ -137,7 +137,7 @@ For the read-only-viewer rollout (ADR-0018), order is mandatory:
 5. The viewer creates their own free Cloudflare account and verifies its email; do not invite them to
    the owner's Cloudflare account or grant a dashboard role. Add that exact email to the policy, then
    send `https://xrender.uk` to the viewer manually—Access does not send an application invitation.
-   Verify `/`, `/watch/:id`, and `/v/:key` including download; directly verify `/stats`, `/status`,
+   Verify `/`, `/watch/:id`, `/v/:key` including download, and `/p/:id`; directly verify `/stats`, `/status`,
    `/oauth/start`, `/oauth/callback`, `/backfill`, and `/api/*` return 403 and owner controls are absent.
 6. Verify a non-listed Cloudflare account is rejected at the Access screen, then add remaining viewers.
 
@@ -169,6 +169,36 @@ plays.
 If the JSON shows `seen > 0` and `downloaded == 0` (and `/status` `counts.failed` is 0), the field
 parameter may have been renamed: change `tweet.fields` to `post.fields` in `BOOKMARK_QUERY`
 (`src/limits.ts`), redeploy, re-run `/backfill`. See `docs/research/2026-08-29-x-api-v2.md`.
+
+### Durable-poster rollout (ADR-0018)
+Do this as two deployments so X-backed rendering remains intact while existing posters are copied.
+
+1. Deploy poster capture, authenticated `/p/:postId`, combined video/poster deletion, and the
+   poster-only backfill while Library and Watch still render their existing X URLs.
+2. In an authenticated browser, open `/backfill?posters=30`. For each response, record
+   `postersStored`, `postersExisting`, `postersUnavailable`, and `posterFailures`, then pass its
+   `nextAfter` into `/backfill?posters=30&after=<nextAfter>`. Stop only when `nextAfter` is `null`.
+   The current 198-row library needs about seven requests, but request count is not proof of
+   completion.
+3. Compare the sum of successful (`postersStored + postersExisting`) and unsuccessful
+   (`postersUnavailable + posterFailures`) results with the eligible downloaded, non-deleted rows
+   whose `preview_url` is present. Investigate every unsuccessful row and rerun from the beginning
+   after transient failures; the operation is idempotent.
+4. Only after every recoverable poster is stored, deploy Library and Watch rendering with
+   same-origin `/p/<postId>` URLs.
+5. Reload the first and last Library pages and representative Watch pages. In browser network logs,
+   confirm poster requests use `/p/`, no request targets `pbs.twimg.com`, and every poster has
+   non-zero natural dimensions. An unrecoverable source must show the stable placeholder.
+
+Rollback either deploy with the normal Worker rollback below. Rolling back the rendering cutover
+restores X URLs; poster objects already copied to private R2 are harmless and can remain for retry.
+
+Executed 2026-09-02: phase one was `4c07dca3-7b47-4d35-8cae-38205aa9e0d0`; seven authenticated
+Paseo-browser batches stored all 198 eligible posters with no unavailable sources or failures; and
+the same-origin cutover is `8df14d41-e59d-4f7e-b8b8-95d302efebe3` at 100%. First/last Library
+pages and Watch were checked with non-zero poster dimensions and no `pbs.twimg.com` requests.
+Use phase one for a rendering-only rollback or `c0852a7b-a9b7-49b4-a4d3-b83682928919` for a full
+pre-feature rollback.
 
 ### 10. Verify the cron
 After ≤30 minutes, dashboard → Worker → **Cron Events** shows a successful invocation, and

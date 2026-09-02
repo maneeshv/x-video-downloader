@@ -1,4 +1,4 @@
-# 0018. Admit exact-email viewers through Cloudflare Access and authorize the owner in the Worker
+# 0019. Admit exact-email viewers through Cloudflare Access and authorize the owner in the Worker
 
 Date: 2026-09-02 | Status: DECIDED | Supersedes: ADR-0004 in part | Evidence: `docs/research/2026-09-02-cloudflare-access-read-only-viewers.md`
 
@@ -15,8 +15,8 @@ duplicate working infrastructure.
 Keep Cloudflare Login, disable its account-member restriction after auditing other Access apps, and
 replace x-downloader's account-member admission with an exact-email policy on the existing Access
 application. Configure one `OWNER_EMAIL`; after verifying a non-empty signed email, allow the owner
-all existing routes and allow every other admitted email only `GET /`, `GET /watch/:postId`, and
-`GET /v/:key`. Default every other and future route to owner-only, keep R2 private, and deploy the
+all existing routes and allow every other admitted email only `GET /`, `GET /watch/:postId`,
+`GET /v/:key`, and `GET /p/:postId`. Default every other and future route to owner-only, keep R2 private, and deploy the
 Worker guard before admitting any viewer.
 
 ## Consequences
@@ -31,4 +31,3 @@ Worker guard before admitting any viewer.
   Access session for immediate cut-off; already downloaded bytes cannot be recalled.
 - revisit when: viewers need selected-video access, write capabilities, per-user state, or enough
   roles that one owner-email comparison no longer describes the product.
-

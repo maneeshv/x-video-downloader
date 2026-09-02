@@ -1,7 +1,7 @@
 # Implement read-only friend access
 
 Spec: `../specs/2026-09-02-read-only-friend-access-design.md`
-Decision: `../../decisions/0018-cloudflare-exact-email-read-only-viewers.md`
+Decision: `../../decisions/0019-cloudflare-exact-email-read-only-viewers.md`
 
 The Worker authorization guard must be deployed and verified before the Access policy admits any
 viewer. No step below changes that order.
@@ -11,7 +11,8 @@ viewer. No step below changes that order.
 - [x] Extend the existing `test/index.test.ts` app helper with `OWNER_EMAIL` and separately signed
   owner/viewer JWTs, keeping distinct JWKS cache keys.
 - [x] Assert the owner retains every existing route and capability.
-- [x] Assert a viewer receives only `GET /`, `GET /watch/:postId`, and `GET /v/:key`, including Range;
+- [x] Assert a viewer receives only `GET /`, `GET /watch/:postId`, `GET /v/:key` including Range, and
+  `GET /p/:postId`;
   `/stats`, `/status`, `/oauth/*`, `/backfill`, every `/api/*`, and non-GET requests return `403`.
 - [x] Assert a missing/empty JWT email is denied everywhere, a missing/empty `OWNER_EMAIL` elevates
   nobody, and owner email comparison is case-insensitive.
@@ -25,8 +26,8 @@ viewer. No step below changes that order.
 - [x] Retain the `{ email }` returned by the existing `verifyAccessJwt`; reject a missing or blank
   verified email before any route handler.
 - [x] Compare normalized email and `OWNER_EMAIL`, with a blank owner value matching nobody.
-- [x] Add one positive viewer-route check before the route chain. Permit exactly Library, watch, and
-  video GET routes; return `403` for every other non-owner request.
+- [x] Add one positive viewer-route check before the route chain. Permit exactly Library, watch,
+  video, and poster GET routes; return `403` for every other non-owner request.
 - [x] Do not add middleware, a role abstraction, storage, dependency, or database migration.
 
 ## 3. Render the viewer experience
@@ -66,7 +67,7 @@ is completed from a working signed-in browser.
 - [ ] Edit the existing x-downloader Access application; keep its current AUD and Cloudflare-only login.
 - [ ] Replace the **Cloudflare account members** Include with exact **Emails** containing only the
   owner, then verify the owner in a fresh session.
-- [ ] Add one viewer email and verify Library/watch/video/download access, hidden controls, and direct
+- [ ] Add one viewer email and verify Library/watch/video/poster/download access, hidden controls, and direct
   `403` responses from owner-only routes.
 - [ ] Verify a non-listed Cloudflare account is rejected at Access, then add remaining viewers.
 
