@@ -56,6 +56,7 @@ export class FakeR2 {
     return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata } : null;
   }
   async put(key: string, body: ReadableStream | ArrayBuffer | Uint8Array | string, opts: any = {}) {
+    if (opts.onlyIf?.etagDoesNotMatch === "*" && this.objects.has(key)) return null;
     const bytes = new Uint8Array(await new Response(body as BodyInit).arrayBuffer());
     // ponytail: a fixed fake upload time (not real put-time) is all If-Modified-Since needs to test against.
     this.objects.set(key, { bytes, customMetadata: opts.customMetadata ?? {}, contentType: opts.httpMetadata?.contentType ?? "", uploaded: new Date("2026-08-01T00:00:00Z") });
@@ -67,7 +68,7 @@ export class FakeR2 {
   async get(key: string, opts: { range?: Headers; onlyIf?: Headers } = {}) {
     // ponytail: magic key for the "generic R2 fault must propagate" test — real R2 can throw for
     // reasons other than an unsatisfiable Range (network fault, internal error).
-    if (key === "99999.mp4") throw new Error("boom");
+    if (key === "99999.mp4" || key === "posters/99999") throw new Error("boom");
     const o = this.objects.get(key);
     if (!o) return null;
     const httpEtag = `"${key}"`;

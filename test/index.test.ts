@@ -22,6 +22,7 @@ async function app() {
       return { status: 200, body: { ...fixtureJson, data: fixtureJson.data.filter((t: { id: string }) => ids.has(t.id)) } };
     }
     if (url.includes("/bookmarks")) return { status: 200, body: fixtureJson };
+    if (url.includes("pbs.twimg.com")) return { status: 200, bodyBytes: new Uint8Array([0xff, 0xd8]), headers: { "content-type": "image/jpeg", "content-length": "2" } };
     return { status: 200, bodyBytes: new Uint8Array([1, 2, 3]), headers: { "content-type": "video/mp4", "content-length": "3" } };
   });
   const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
@@ -45,6 +46,7 @@ async function seeded() {
   await a.store.upsertBookmark(dlRow("12345"));
   await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
   await a.r2.put("12345-1.mp4", new Uint8Array([1]), {});
+  await a.r2.put("posters/12345", new Uint8Array([0xff, 0xd8]), { httpMetadata: { contentType: "image/jpeg" } });
   return a;
 }
 const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknown, contentType = "application/json") =>
@@ -52,7 +54,7 @@ const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknow
 
 test("every route is 403 without a valid Access JWT", async () => {
   const { env, f } = await app();
-  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats"]) {
+  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/p/12345", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats"]) {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
   assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
@@ -116,6 +118,23 @@ test("duration backfill batches missing downloaded rows without downloading vide
   assert.equal(a.r2.objects.size, 0);
 });
 
+test("poster-only /backfill validates mode and carries the keyset cursor", async () => {
+  const a = await app();
+  for (let id = 12345; id <= 12376; id++) {
+    await a.store.upsertBookmark(dlRow(String(id)));
+    await a.r2.put(`${id}.mp4`, new Uint8Array([1]));
+  }
+  assert.equal((await a.get("/backfill?posters=1&downloads=1")).status, 400);
+  assert.equal((await a.get("/backfill?posters=1&after=bad")).status, 400);
+  assert.equal((await a.get("/backfill?posters=1.5")).status, 400);
+  const first = await (await a.get("/backfill?posters=0")).json() as { postersStored: number; nextAfter: string | null };
+  assert.deepEqual(first, { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: "12345" });
+  const second = await (await a.get(`/backfill?posters=31&after=${first.nextAfter}`)).json();
+  assert.deepEqual(second, { postersStored: 30, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: "12375" });
+  const third = await (await a.get("/backfill?posters=30&after=12375")).json();
+  assert.deepEqual(third, { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: null });
+});
+
 test("/v/:key streams from R2 with Range support and rejects bad keys", async () => {
   const a = await app();
   // VIDEO_KEY_RE (src/limits.ts) requires 5-25 digits — a real X post id — so the key
@@ -164,6 +183,25 @@ test("/v/:key: an unsatisfiable Range 416s", async () => {
 test("/v/:key: a non-Range R2 fault propagates instead of becoming a 416", async () => {
   const a = await app();
   await assert.rejects(a.get("/v/99999.mp4"));
+});
+
+test("/p/:postId serves private R2 posters, validators, and a stable missing placeholder", async () => {
+  const a = await app();
+  await a.r2.put("posters/12345", new Uint8Array([0xff, 0xd8]), { httpMetadata: { contentType: "image/jpeg" } });
+  const image = await a.get("/p/12345");
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get("content-type"), "image/jpeg");
+  assert.equal(image.headers.get("content-length"), "2");
+  assert.equal(image.headers.get("cache-control"), "private, max-age=31536000, immutable");
+  assert.equal(image.headers.get("x-content-type-options"), "nosniff");
+  assert.equal((await a.get("/p/12345", { "if-none-match": '"posters/12345"' })).status, 304);
+  assert.equal((await a.get("/p/12345", { "if-modified-since": "Sat, 01 Aug 2026 00:00:00 GMT" })).status, 304);
+  const missing = await a.get("/p/12346");
+  assert.equal(missing.status, 200);
+  assert.equal(missing.headers.get("content-type"), "image/svg+xml");
+  assert.equal(missing.headers.get("cache-control"), "no-store");
+  assert.equal((await a.get("/p/bad")).status, 404);
+  await assert.rejects(a.get("/p/99999"), /boom/);
 });
 
 test("html escapes text", async () => {
@@ -215,7 +253,8 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.match(h, /href="\/watch\/12345"/);
   assert.match(h, /Aardvark/, "title shown");
   assert.match(h, /hello world/, "text fallback shown when no title");
-  assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "poster hotlinked");
+  assert.match(h, /src="\/p\/12345"/, "poster is same-origin");
+  assert.doesNotMatch(h, /pbs\.twimg\.com/, "X poster URL is never rendered");
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
   h = await html("/?sort=oldest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
@@ -281,6 +320,8 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.equal(r.status, 200);
   const h = await r.text();
   assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
+  assert.match(h, /poster="\/p\/12345"/);
+  assert.doesNotMatch(h, /pbs\.twimg\.com/);
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
   assert.match(h, /\/api\/videos\//, "mutation script present");

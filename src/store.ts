@@ -18,6 +18,7 @@ export type Status = {
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
 export type MissingDuration = { post_id: string; r2_key: string };
+export const posterKey = (postId: string) => `posters/${postId}`;
 export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
@@ -147,6 +148,12 @@ export class Store {
       .bind(durationMs, postId, r2Key).run();
     return r.meta.changes > 0;
   }
+  async listPosterSources(after: string | null, limit: number): Promise<BookmarkRow[]> {
+    const { results } = await this.db
+      .prepare("SELECT * FROM bookmarks WHERE status = 'downloaded' AND deleted_at IS NULL AND preview_url IS NOT NULL AND post_id > ? ORDER BY post_id ASC LIMIT ?")
+      .bind(after ?? "", limit).all<BookmarkRow>();
+    return results;
+  }
   // failed → pending: sync() re-attempts pending rows the next time it sees the post (src/sync.ts processItem).
   async retry(postId: string, now: string): Promise<boolean> {
     const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE post_id = ? AND status = 'failed'").bind(now, postId).run();
@@ -178,7 +185,7 @@ export class Store {
   // ponytail: X allows ≤4 media per post (key scheme in src/x.ts) and R2 ignores missing keys,
   // so name the sibling keys instead of paying a list() call.
   deleteVideos(postId: string): Promise<void> {
-    return this.r2.delete([`${postId}.mp4`, ...[1, 2, 3, 4].map((n) => `${postId}-${n}.mp4`)]);
+    return this.r2.delete([`${postId}.mp4`, ...[1, 2, 3, 4].map((n) => `${postId}-${n}.mp4`), posterKey(postId)]);
   }
 
   async has(key: string): Promise<boolean> { return (await this.r2.head(key)) !== null; }
@@ -192,5 +199,11 @@ export class Store {
   }
   getVideo(key: string, reqHeaders: Headers): Promise<R2ObjectBody | R2Object | null> {
     return this.r2.get(key, { range: reqHeaders, onlyIf: reqHeaders });
+  }
+  putPoster(postId: string, body: ReadableStream, contentType: string): Promise<R2Object | null> {
+    return this.r2.put(posterKey(postId), body, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: { contentType } });
+  }
+  getPoster(postId: string, reqHeaders: Headers): Promise<R2ObjectBody | R2Object | null> {
+    return this.r2.get(posterKey(postId), { onlyIf: reqHeaders });
   }
 }
