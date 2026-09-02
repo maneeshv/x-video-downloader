@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Sort Library by file size (branch `fix/library-sort-by-size`)
+- Did: added Largest and Smallest to the existing Library sort control and URL allow-list. `Store.listLibrary()` orders on the existing D1 `bytes` column, with deterministic post ID tie-breaks and unknown sizes last in both directions. Extended the existing Store and route tests; `npm run check` passes all 72 tests, both TypeScript projects, and the session-doc check.
+- Decided: no migration, client-side sorting, dependency, or new abstraction; the server already owns filtering, pagination, and ordering, and D1 already stores each video's size.
+- Learned / gotcha: the UI event was working; size was absent from the shared sort type, parser, SQL allow-list, and dropdown, so an unrecognized `sort` value correctly fell back to newest.
+- Left undone: not merged or deployed.
+
 ## 2026-09-02 — Raise the maximum file-size ceiling to 5 GiB
 - Did: raised `MAX_FILE_BYTES` from 3 GiB to 5 GiB (5,368,709,120 bytes). The `/stats` form now derives its 5120 MB maximum and 5 GB hint from that constant; API/KV/downloader validation already shared it. Updated boundary/UI tests and current architecture docs. Both TypeScript projects typecheck and all 72 tests pass.
 - Decided: ADR-0017 supersedes ADR-0015 for the immutable ceiling only. The 1 GiB default, 1 MiB minimum, per-run snapshot, and separate retry/backfill actions are unchanged.

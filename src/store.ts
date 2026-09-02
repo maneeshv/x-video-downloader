@@ -21,7 +21,7 @@ export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
 export type LibraryQuery = {
-  q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title";
+  q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title" | "largest" | "smallest";
   page?: number; perPage?: LibraryPageSize;
 };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
@@ -30,6 +30,8 @@ const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   newest: "posted_at DESC, post_id DESC",
   oldest: "posted_at ASC, post_id ASC",
   title: "COALESCE(title, text) COLLATE NOCASE ASC, post_id DESC",
+  largest: "bytes IS NULL ASC, bytes DESC, post_id DESC",
+  smallest: "bytes IS NULL ASC, bytes ASC, post_id DESC",
 };
 const libraryFilter = ({ q, fav }: LibraryQuery): { where: string; args: unknown[] } => {
   const clauses = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];

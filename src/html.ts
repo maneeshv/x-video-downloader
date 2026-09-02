@@ -72,7 +72,7 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   <div class="poster">${r.preview_url ? `<img loading="lazy" src="${url(r.preview_url)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
   <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span></div></div>
 </a>`).join("\n");
-  const sorts = (["newest", "oldest", "title"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
+  const sorts = (["newest", "oldest", "title", "largest", "smallest"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
   const sizes = LIBRARY_PAGE_SIZES.map((n) => `<option value="${n}"${perPage === n ? " selected" : ""}>${n}</option>`).join("");
   const start = total ? (pageNumber - 1) * perPage + 1 : 0, end = total ? start + rows.length - 1 : 0;
   const pagination = totalPages > 1 ? `<nav class="pagination" aria-label="Library pages">

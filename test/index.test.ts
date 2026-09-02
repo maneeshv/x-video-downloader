@@ -173,7 +173,7 @@ test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is id
 
 test("/ renders the grid and honours q, fav, sort; deleted videos leave it", async () => {
   const a = await seeded();
-  await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z" }));
+  await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z", bytes: 10 }));
   await a.store.updateMeta("12346", { title: "Aardvark", favorite: true }, "2026-08-30T00:00:00Z");
   const html = async (p: string) => { const r = await a.get(p); assert.equal(r.status, 200, p); return r.text(); };
   let h = await html("/");
@@ -183,6 +183,11 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "poster hotlinked");
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
   h = await html("/?sort=oldest");
+  assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
+  h = await html("/?sort=largest");
+  assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"));
+  assert.match(h, /<option value="largest" selected>Largest<\/option>/);
+  h = await html("/?sort=smallest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
   h = await html("/?q=zebra");
   assert.match(h, /\/watch\/12346\?q=zebra"/); assert.doesNotMatch(h, /\/watch\/12345\?q=zebra"/);
