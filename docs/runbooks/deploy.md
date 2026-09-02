@@ -37,8 +37,8 @@ Resource ids created 2026-08-30 (not secrets, safe to record):
 ```bash
 npx wrangler d1 migrations apply x-downloader --remote   # answer yes if prompted
 ```
-This applies every pending file in `migrations/` (as of 2026-08-30: `0001_bookmarks.sql`,
-`0002_library.sql`). Run it **before** `wrangler deploy` whenever `migrations/` changed — the new
+This applies every pending file in `migrations/` (as of 2026-09-02: `0001_bookmarks.sql`,
+`0002_library.sql`, `0003_duration.sql`). Run it **before** `wrangler deploy` whenever `migrations/` changed — the new
 code reads the new columns immediately, so deploying first would 500 on the first request that
 touches them.
 

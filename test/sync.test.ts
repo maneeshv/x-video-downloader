@@ -85,7 +85,7 @@ test("pending D1 rows are hydrated directly even when absent from bookmarks", as
   for (const [i, post_id] of pendingIds.entries()) {
     await w.store.upsertBookmark({
       post_id, posted_at: null, text: null, post_url: `https://x.com/i/status/${post_id}`, has_video: 1,
-      status: "pending", error: null, r2_key: `${post_id}.mp4`, bytes: null, preview_url: null,
+      status: "pending", error: null, r2_key: `${post_id}.mp4`, bytes: null, duration_ms: null, preview_url: null,
       now: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
     });
   }
@@ -237,6 +237,7 @@ test("multi-video post where the FIRST video permanently fails: r2_key points at
   assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
   const row = await w.store.getBookmark("1000000000000000004");
   assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-2.mp4"]);
+  assert.equal(row!.duration_ms, 90000, "duration belongs to the stored second video");
   assert.ok(w.r2.objects.has("1000000000000000004-2.mp4"), "the stored key is actually in R2");
   assert.equal(w.r2.objects.has("1000000000000000004-1.mp4"), false);
 });

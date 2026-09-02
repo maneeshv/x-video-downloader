@@ -4,6 +4,11 @@ import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, type BookmarkRow, type L
 const esc = (s: string | null) => (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const js = (s: string) => JSON.stringify(s).replace(/</g, "\\u003c");
 const mb = (b: number | null) => (b ? `${(b / 1024 / 1024).toFixed(1)} MB` : "Size unavailable");
+const duration = (ms: number | null) => {
+  if (ms === null) return "Duration unavailable";
+  const seconds = Math.floor(ms / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60);
+  return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}` : `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+};
 const bytes = (b: number) => (b < 1024 ? `${b} B` : b < 1024 ** 3 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${(b / 1024 ** 3).toFixed(2)} GB`);
 // Only https URLs are ever emitted into src/href (spec §7); anything else renders empty.
 const url = (u: string | null) => (u && u.startsWith("https://") ? esc(u) : "");
@@ -70,7 +75,7 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   // ponytail: multi-video posts show the first video only; the others are in R2 as <id>-n.mp4 (rclone gets them).
   const cards = rows.map((r) => `<a class="video-card" id="video-${esc(r.post_id)}" href="${esc(watchHref(r.post_id, q))}" aria-label="Play ${esc(title(r))}">
   <div class="poster">${r.preview_url ? `<img loading="lazy" src="${url(r.preview_url)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
-  <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span></div></div>
+  <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span><span class="separator">·</span><span>${duration(r.duration_ms)}</span></div></div>
 </a>`).join("\n");
   const sorts = (["newest", "oldest", "title", "largest", "smallest"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
   const sizes = LIBRARY_PAGE_SIZES.map((n) => `<option value="${n}"${perPage === n ? " selected" : ""}>${n}</option>`).join("");

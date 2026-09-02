@@ -1,7 +1,7 @@
 import { BOOKMARK_QUERY, X_API, X_AUTHORIZE_URL, X_SCOPES, X_TOKEN_URL } from "#src/limits";
 
 export type Variant = { bit_rate?: number; content_type: string; url: string };
-export type Media = { media_key: string; type: "video" | "animated_gif" | "photo"; variants?: Variant[]; preview_image_url?: string };
+export type Media = { media_key: string; type: "video" | "animated_gif" | "photo"; variants?: Variant[]; preview_image_url?: string; duration_ms?: number };
 export type Tweet = { id: string; text: string; created_at?: string; attachments?: { media_keys?: string[] } };
 export type BookmarksResponse = {
   data?: Tweet[];
@@ -9,7 +9,7 @@ export type BookmarksResponse = {
   meta?: { result_count?: number; next_token?: string };
   errors?: unknown[];
 };
-export type Video = { key: string; url: string; bitRate: number };
+export type Video = { key: string; url: string; bitRate: number; durationMs: number | null };
 export type Item = {
   postId: string; text: string; postedAt: string | null; postUrl: string;
   previewUrl: string | null; hasVideoMedia: boolean; videos: Video[];
@@ -31,7 +31,8 @@ export function parseBookmarks(res: BookmarksResponse): Item[] {
       const v = selectVariant(m.variants);
       if (!v) return [];
       const key = vids.length > 1 ? `${t.id}-${i + 1}.mp4` : `${t.id}.mp4`;
-      return [{ key, url: v.url, bitRate: v.bit_rate ?? 0 }];
+      const durationMs = Number.isSafeInteger(m.duration_ms) && m.duration_ms! >= 0 ? m.duration_ms! : null;
+      return [{ key, url: v.url, bitRate: v.bit_rate ?? 0, durationMs }];
     });
     return {
       postId: t.id, text: t.text, postedAt: t.created_at ?? null,

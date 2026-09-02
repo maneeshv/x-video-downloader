@@ -65,7 +65,7 @@ async function needsReauth(d: Deps, res: SyncResult): Promise<SyncResult> {
 function row(it: Item, status: BookmarkStatus, d: Deps, extra: Partial<BookmarkUpsert> = {}): BookmarkUpsert {
   return {
     post_id: it.postId, posted_at: it.postedAt, text: it.text, post_url: it.postUrl, has_video: it.hasVideoMedia ? 1 : 0,
-    status, error: null, r2_key: it.videos[0]?.key ?? null, bytes: null, preview_url: it.previewUrl, now: iso(now(d)), ...extra,
+    status, error: null, r2_key: it.videos[0]?.key ?? null, bytes: null, duration_ms: it.videos[0]?.durationMs ?? null, preview_url: it.previewUrl, now: iso(now(d)), ...extra,
   };
 }
 
@@ -109,11 +109,12 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   }
   // r2_key must point at a video actually in R2 (index/video route serve straight from it) —
   // it.videos[0] is wrong whenever the first video is the one that permanently failed.
-  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey }));
+  const duration_ms = it.videos.find((v) => v.key === firstStoredKey)?.durationMs ?? null;
+  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, duration_ms }));
   // Partial: at least one video of a multi-video post is stored and the rest can never succeed —
   // record it as downloaded (with the failing video's error) instead of hiding the stored sibling
   // behind a "pending"/"failed" row that never lists it.
-  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, error: fail.error }));
+  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, duration_ms, error: fail.error }));
   if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error, bytes: fail.bytes ?? null }));
   return d.store.upsertBookmark(row(it, "pending", d));
 }

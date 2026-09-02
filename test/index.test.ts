@@ -37,7 +37,7 @@ async function app() {
 
 const dlRow = (post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
   post_id, posted_at: "2026-08-01T00:00:00Z", text: "hello world", post_url: `https://x.com/i/status/${post_id}`, has_video: 1 as const,
-  status: "downloaded" as const, error: null, r2_key: `${post_id}.mp4`, bytes: 5, preview_url: "https://pbs.twimg.com/p.jpg", now: "2026-08-02T00:00:00Z", ...over,
+  status: "downloaded" as const, error: null, r2_key: `${post_id}.mp4`, bytes: 5, duration_ms: 5000, preview_url: "https://pbs.twimg.com/p.jpg", now: "2026-08-02T00:00:00Z", ...over,
 });
 // One downloaded two-video post in D1 + R2.
 async function seeded() {
@@ -139,9 +139,15 @@ test("/v/:key: a non-Range R2 fault propagates instead of becoming a 416", async
 
 test("html escapes text", async () => {
   const { renderIndex } = await import("#src/html");
-  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null }], {});
+  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null }], {});
   assert.doesNotMatch(out, /<script>x/);
   assert.match(out, /&lt;script&gt;/);
+});
+
+test("library cards show video duration alongside file size", async () => {
+  const { renderIndex } = await import("#src/html");
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 5 * 1024 ** 2, duration_ms: 65000, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  assert.match(renderIndex([row], {}), /5\.0 MB<\/span><span class="separator">·<\/span><span>1:05<\/span>/);
 });
 
 test("POST /api/videos/:id validates, then updates title/description/favorite", async () => {
@@ -254,7 +260,7 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
 
 test("library, watch and stats pages link to the Access logout URL", async () => {
   const { renderIndex, renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
   assert.match(renderIndex([row], {}), /href="\/cdn-cgi\/access\/logout"/);
   assert.match(renderWatch(row), /href="\/cdn-cgi\/access\/logout"/);
   assert.match((await (await (await seeded()).get("/stats")).text()), /href="\/cdn-cgi\/access\/logout"/);
@@ -316,7 +322,7 @@ test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; 
 
 test("watch page carries a Download link to the same file the player uses", async () => {
   const { renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
   assert.match(renderWatch(row), /<a[^>]*href="\/v\/1-2\.mp4"[^>]*download="1\.mp4"/);
 });
 
