@@ -1,6 +1,6 @@
 # Product: x-downloader
 
-Updated: 2026-09-02 (read-only friend access implemented; guarded rollout pending)
+Updated: 2026-09-02 (read-only friend guard deployed; Access admission rollout pending)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.

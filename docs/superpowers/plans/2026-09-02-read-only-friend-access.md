@@ -49,6 +49,10 @@ viewer. No step below changes that order.
 
 ## 5. Deploy the guard before expanding Access
 
+Worker version `c0852a7b-a9b7-49b4-a4d3-b83682928919` is deployed at 100% with the account-members
+policy unchanged; edge checks pass. The checkbox remains open until authenticated owner verification
+is completed from a working signed-in browser.
+
 - [ ] With the account-members policy unchanged, deploy the Worker and verify the configured owner can
   browse, edit metadata, favourite, delete a disposable test item if available, retry, change the
   file limit, run backfill, and enter X reauthorization without completing unnecessary consent.
