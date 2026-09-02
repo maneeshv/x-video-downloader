@@ -24,6 +24,11 @@ const authed = async (store: Store, expiresAt = NOW + 3600_000) => {
   await store.putTokens({ access: "A", refresh: "R", expiresAt }); await store.putUserId("u1");
 };
 const routes = (bookmarks: unknown, video: (url: string) => Scripted = () => mp4()) => (url: string): Scripted => {
+  if (url.includes("/tweets?")) {
+    const ids = new Set(new URL(url).searchParams.get("ids")?.split(","));
+    const body = bookmarks as { data?: { id: string }[] };
+    return { status: 200, body: { ...body, data: body.data?.filter((t) => ids.has(t.id)) } };
+  }
   if (url.includes("/bookmarks")) return { status: 200, body: bookmarks };
   if (url.includes("api.telegram.org")) return { status: 200, body: { ok: true } };
   if (url.includes("oauth2/token")) return { status: 200, body: { access_token: "A2", refresh_token: "R2", expires_in: 7200 } };
@@ -60,6 +65,40 @@ test("download cap leaves the rest pending; next run picks them up", async () =>
   const r2 = await sync(w.d);
   assert.equal(r2.downloaded, 2);
   assert.equal((await w.store.listLibrary()).length, 7);
+});
+
+test("pending D1 rows are hydrated directly even when absent from bookmarks", async () => {
+  const source = fx(), foundId = "1000000000000000001";
+  const missingIds = Array.from({ length: MAX_DOWNLOADS_PER_RUN }, (_, i) => `999999999999999999${i}`);
+  const lookup = {
+    data: source.data.filter((t: { id: string }) => t.id === foundId),
+    includes: source.includes,
+    meta: { result_count: 1 },
+  };
+  const empty = { data: [], includes: { media: [] }, meta: { result_count: 0 } };
+  const w = world((url) => {
+    if (url.includes("/tweets?")) return { status: 200, body: lookup };
+    if (url.includes("/bookmarks")) return { status: 200, body: empty };
+    return mp4();
+  });
+  const pendingIds = [...missingIds, foundId];
+  for (const [i, post_id] of pendingIds.entries()) {
+    await w.store.upsertBookmark({
+      post_id, posted_at: null, text: null, post_url: `https://x.com/i/status/${post_id}`, has_video: 1,
+      status: "pending", error: null, r2_key: `${post_id}.mp4`, bytes: null, preview_url: null,
+      now: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+    });
+  }
+  await authed(w.store);
+
+  const r = await sync(w.d);
+
+  assert.deepEqual(r, { pages: 1, seen: 0, downloaded: 1, failed: 0, bytes: 3 });
+  assert.equal((await w.store.getBookmark(foundId))?.status, "downloaded");
+  assert.equal((await w.store.getBookmark(missingIds[0]!))?.status, "pending", "an omitted post is not terminalized");
+  const lookups = w.f.calls.filter(([url]) => url.includes("/tweets?"));
+  assert.equal(lookups.length, 1);
+  assert.equal(new URL(lookups[0]![0]).searchParams.get("ids"), pendingIds.join(","));
 });
 
 test("paused → skipped without any API call", async () => {

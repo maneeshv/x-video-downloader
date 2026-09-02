@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { authorizeUrl, exchangeCode, fetchBookmarks, fetchMe, pkceChallenge, randomToken, refreshTokens, XApiError } from "#src/x";
+import { authorizeUrl, exchangeCode, fetchBookmarks, fetchMe, fetchTweetsByIds, pkceChallenge, randomToken, refreshTokens, XApiError } from "#src/x";
 import { fakeFetch } from "./fakes.ts";
 
 const cfg = { clientId: "cid", clientSecret: "sec", redirectUri: "https://w.example/oauth/callback" };
@@ -71,4 +71,16 @@ test("fetchBookmarks builds the exact query; fetchMe returns the id", async () =
   assert.equal(u.searchParams.get("tweet.fields"), "created_at,text,attachments");
   assert.equal((f.calls[0][1].headers as Record<string, string>).Authorization, "Bearer tok");
   assert.equal(await fetchMe(f, "tok"), "42");
+});
+
+test("fetchTweetsByIds requests exact posts with the existing media fields", async () => {
+  const f = fakeFetch([{ status: 200, body: { data: [] } }]);
+  await fetchTweetsByIds(f, "tok", ["1", "2"]);
+  const [url, init] = f.calls[0]!;
+  const u = new URL(url);
+  assert.equal(u.pathname, "/2/tweets");
+  assert.equal(u.searchParams.get("ids"), "1,2");
+  assert.equal(u.searchParams.get("expansions"), "attachments.media_keys");
+  assert.equal(u.searchParams.get("media.fields"), "media_key,type,variants,preview_image_url,duration_ms");
+  assert.equal((init.headers as Record<string, string>).Authorization, "Bearer tok");
 });

@@ -17,6 +17,10 @@ async function app() {
     if (url.endsWith("/cdn-cgi/access/certs")) return { status: 200, body: { keys: [signer.jwk] } };
     if (url.includes("oauth2/token")) return { status: 200, body: { access_token: "A", refresh_token: "R", expires_in: 7200 } };
     if (url.includes("/users/me")) return { status: 200, body: { data: { id: "u1" } } };
+    if (url.includes("/tweets?")) {
+      const ids = new Set(new URL(url).searchParams.get("ids")?.split(","));
+      return { status: 200, body: { ...fixtureJson, data: fixtureJson.data.filter((t: { id: string }) => ids.has(t.id)) } };
+    }
     if (url.includes("/bookmarks")) return { status: 200, body: fixtureJson };
     return { status: 200, bodyBytes: new Uint8Array([1, 2, 3]), headers: { "content-type": "video/mp4", "content-length": "3" } };
   });

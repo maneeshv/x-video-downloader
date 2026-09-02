@@ -164,6 +164,15 @@ test("stats groups rows by status, error and deleted; listByStatus is newest-upd
   assert.deepEqual((await s.listByStatus(["pending", "failed"])).map((r) => r.post_id), ["6", "5", "4", "3"]);
 });
 
+test("listPendingIds returns the oldest pending rows first and respects its limit", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row({ post_id: "3", now: "2026-08-03T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "2", now: "2026-08-01T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "1", now: "2026-08-01T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "4", status: "failed", now: "2026-07-01T00:00:00Z" }));
+  assert.deepEqual(await s.listPendingIds(2), ["1", "2"]);
+});
+
 test("retry resets a failed row to pending and clears its error; other rows untouched", async () => {
   const { s } = mk();
   await s.upsertBookmark(row({ post_id: "1", status: "failed", error: "too_large" }));

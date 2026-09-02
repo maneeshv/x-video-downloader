@@ -1,7 +1,7 @@
 // Hard caps (ADR-0005). File size has an owner-selected KV operating limit, but this
 // immutable ceiling still bounds it (ADR-0015); raising the ceiling is a code change.
 export const VERSION = "v2";
-export const MAX_API_REQUESTS_PER_RUN = 3;          // documents the structural bound of one run (1 bookmarks page + ≤2 token calls + ≤2 forced-refresh calls on 401); asserted by tests, not enforced at runtime.
+export const MAX_API_REQUESTS_PER_RUN = 4;          // normal run: ≤1 pending lookup + 1 bookmarks page + ≤2 token refresh attempts; asserted by tests, not enforced at runtime.
 export const MAX_DOWNLOADS_PER_RUN = 5;             // rest wait for the next tick (ADR-0008)
 export const MIN_FILE_BYTES = 1024 ** 2;             // stats-page setting floor: 1 MiB (ADR-0015)
 export const DEFAULT_MAX_FILE_BYTES = 1024 ** 3;     // existing deployments remain at 1 GiB until the owner saves a setting
