@@ -7,7 +7,7 @@ import { FakeD1, FakeKV, FakeR2 } from "./fakes.ts";
 const mk = () => { const kv = new FakeKV(), r2 = new FakeR2(), d1 = new FakeD1(); return { kv, r2, d1, s: new Store(kv.asKV(), d1.asD1(), r2.asR2()) }; };
 const row = (over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
   post_id: "1", posted_at: "2026-08-01T00:00:00Z", text: "t", post_url: "https://x.com/i/status/1", has_video: 1 as const,
-  status: "pending" as const, error: null, r2_key: null, bytes: null, preview_url: null, now: "2026-08-29T00:00:00Z", ...over,
+  status: "pending" as const, error: null, r2_key: null, bytes: null, duration_ms: null, preview_url: null, now: "2026-08-29T00:00:00Z", ...over,
 });
 
 test("tokens, userId, status, pause round-trip through KV", async () => {
@@ -79,6 +79,13 @@ test("migration 0002: library columns exist and default to unset", async () => {
   await s.upsertBookmark(row());
   const b = (await s.getBookmark("1"))!;
   assert.deepEqual([b.title, b.description, b.favorite, b.deleted_at], [null, null, 0, null]);
+});
+
+test("migration 0003: duration defaults to unknown and upsert preserves known duration", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row({ duration_ms: 65000 }));
+  await s.upsertBookmark(row());
+  assert.equal((await s.getBookmark("1"))?.duration_ms, 65000);
 });
 
 const dl = (s: Store, post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) =>

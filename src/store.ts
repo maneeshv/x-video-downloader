@@ -4,7 +4,7 @@ import type { Tokens } from "#src/x";
 export type BookmarkStatus = "no_video" | "pending" | "downloaded" | "failed";
 export type BookmarkRow = {
   post_id: string; first_seen_at: string; posted_at: string | null; text: string | null; post_url: string;
-  has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null;
+  has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null; duration_ms: number | null;
   preview_url: string | null; updated_at: string;
   // Library metadata (migration 0002, ADR-0011). Owner-set; sync never writes them.
   title: string | null; description: string | null; favorite: 0 | 1; deleted_at: string | null;
@@ -41,13 +41,14 @@ const libraryFilter = ({ q, fav }: LibraryQuery): { where: string; args: unknown
 };
 
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
-const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, preview_url, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, duration_ms, preview_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(post_id) DO UPDATE SET
   status      = CASE WHEN bookmarks.status = 'downloaded' THEN 'downloaded' ELSE excluded.status END,
   error       = CASE WHEN bookmarks.status = 'downloaded' THEN bookmarks.error ELSE excluded.error END,
   r2_key      = COALESCE(excluded.r2_key, bookmarks.r2_key),
   bytes       = COALESCE(excluded.bytes, bookmarks.bytes),
+  duration_ms = COALESCE(excluded.duration_ms, bookmarks.duration_ms),
   preview_url = COALESCE(excluded.preview_url, bookmarks.preview_url),
   posted_at   = COALESCE(excluded.posted_at, bookmarks.posted_at),
   text        = COALESCE(excluded.text, bookmarks.text),
@@ -95,7 +96,7 @@ export class Store {
 
   async upsertBookmark(r: BookmarkUpsert): Promise<void> {
     await this.db.prepare(UPSERT)
-      .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.preview_url, r.now)
+      .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.duration_ms, r.preview_url, r.now)
       .run();
   }
   getBookmark(postId: string): Promise<BookmarkRow | null> {

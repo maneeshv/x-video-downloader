@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Show video duration on Library cards (branch `feat/library-video-duration`)
+- Did: carried the `duration_ms` field already requested from X through the media parser and D1 upsert, added additive migration `0003_duration.sql`, and rendered `m:ss`/`h:mm:ss` beside each card's file size. Multi-video rows store the duration matching the playable `r2_key`, including when the first media download fails. TDD red covered the discarded parser value and missing card output; both TypeScript projects and all 74 tests pass.
+- Decided: no client-side media probing, dependency, new endpoint, or ADR; D1 is already the Library index and X already returns the required metadata. Cloudflare's current D1 guidance confirms applying pending migrations before deploying code that reads the new column.
+- Learned / gotcha: existing eligible D1 rows have no duration until X metadata is seen again; after deployment, one `/backfill` run populates them without redownloading videos already present in R2. This is encoded in STATUS Next and the D1/upsert tests, so no GOTCHAS entry.
+- Left undone: not merged, migrated remotely, deployed, or backfilled.
+
 ## 2026-09-02 — Sort Library by file size (branch `fix/library-sort-by-size`)
 - Did: added Largest and Smallest to the existing Library sort control and URL allow-list. `Store.listLibrary()` orders on the existing D1 `bytes` column, with deterministic post ID tie-breaks and unknown sizes last in both directions. Extended the existing Store and route tests; `npm run check` passes all 72 tests, both TypeScript projects, and the session-doc check.
 - Decided: no migration, client-side sorting, dependency, or new abstraction; the server already owns filtering, pagination, and ordering, and D1 already stores each video's size.
