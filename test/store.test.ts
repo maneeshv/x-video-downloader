@@ -93,8 +93,8 @@ const dl = (s: Store, post_id: string, over: Partial<Parameters<Store["upsertBoo
 
 test("listLibrary filters by q and fav, sorts, and hides deleted rows", async () => {
   const { s } = mk();
-  await dl(s, "1", { text: "cats on mars", posted_at: "2026-08-01T00:00:00Z", bytes: 20 });
-  await dl(s, "2", { text: "dogs", posted_at: "2026-08-02T00:00:00Z", bytes: 10 });
+  await dl(s, "1", { text: "cats on mars", posted_at: "2026-08-01T00:00:00Z", bytes: 20, duration_ms: 30000 });
+  await dl(s, "2", { text: "dogs", posted_at: "2026-08-02T00:00:00Z", bytes: 10, duration_ms: 60000 });
   await dl(s, "3", { text: "zebra", posted_at: "2026-08-03T00:00:00Z" });
   await s.upsertBookmark(row({ post_id: "4", status: "pending", text: "cats pending" }));
   await s.updateMeta("2", { title: "Alpha", favorite: true }, "2026-08-30T00:00:00Z");
@@ -105,6 +105,8 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.deepEqual(await ids({ sort: "title" }), ["2", "1", "3"], "title falls back to text; case-insensitive");
   assert.deepEqual(await ids({ sort: "largest" }), ["1", "2", "3"], "unknown sizes sort last");
   assert.deepEqual(await ids({ sort: "smallest" }), ["2", "1", "3"], "unknown sizes sort last");
+  assert.deepEqual(await ids({ sort: "longest" }), ["2", "1", "3"], "unknown durations sort last");
+  assert.deepEqual(await ids({ sort: "shortest" }), ["1", "2", "3"], "unknown durations sort last");
   assert.deepEqual(await ids({ q: "cats" }), ["3", "1"], "matches text or description, not pending rows");
   assert.deepEqual(await ids({ fav: true }), ["2"]);
   assert.deepEqual(await ids({ q: "alpha", fav: true }), ["2"]);
