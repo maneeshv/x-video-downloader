@@ -1,3 +1,4 @@
+import { MAX_FILE_BYTES } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, type BookmarkRow, type LibraryQuery, type StatRow, type Status } from "#src/store";
 
 const esc = (s: string | null) => (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -153,10 +154,10 @@ export function renderStats(stats: StatRow[], rows: BookmarkRow[], status: Statu
   </div>
   <section class="stats-section"><h2>Download limit</h2>
     <form id="max-file-limit" class="limit-form">
-      <label class="field"><span class="field-label">Maximum file size (MB)</span><input id="max-file-mb" name="maxFileMb" type="number" min="1" max="3072" step="1" value="${maxFileBytes / 1024 ** 2}" required></label>
+      <label class="field"><span class="field-label">Maximum file size (MB)</span><input id="max-file-mb" name="maxFileMb" type="number" min="1" max="${MAX_FILE_BYTES / 1024 ** 2}" step="1" value="${maxFileBytes / 1024 ** 2}" required></label>
       <button class="button primary" type="submit">Save limit</button><span id="limit-msg" class="save-message" role="status" aria-live="polite"></span>
     </form>
-    <p class="d">1–3072 MB (3 GB hard maximum). A saved change applies to the next cron or backfill run; retrying failed posts remains a separate action.</p>
+    <p class="d">1–${MAX_FILE_BYTES / 1024 ** 2} MB (${MAX_FILE_BYTES / 1024 ** 3} GB hard maximum). A saved change applies to the next cron or backfill run; retrying failed posts remains a separate action.</p>
   </section>
   <section class="stats-section"><h2>Health</h2><div class="table-wrap"><table>
     <tr><th>Last run</th><td>${esc(status.lastRun ?? "never")}</td></tr>
