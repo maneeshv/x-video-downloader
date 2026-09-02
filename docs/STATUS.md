@@ -7,7 +7,7 @@ Updated: 2026-09-02
 - **Last observed real account state (2026-08-31):** 190 downloaded / 0 pending / 8 `too_large` / 56 no video / 1 deleted / 35.91 GB R2. Those 8 old failures have blank sizes until retried once.
 
 ## Next
-1. Push, review, and merge `feat/library-video-duration`; production is already running this exact feature commit plus the documentation-only deployment record.
+1. Open, review, and merge `feat/library-video-duration`; the branch is pushed and production is already running this exact feature commit plus the documentation-only deployment record. PR creation is waiting for GitHub sign-in in the Paseo browser.
 2. Decide whether the 133 older rows that X no longer returns need a separate R2/MP4 metadata extraction path; the normal X backfill cannot populate them.
 3. Save the desired operating file limit on `/stats` and explicitly retry/backfill old `too_large` rows if the merged 5 GiB ceiling is newly deployed.
 4. Verify a 50/page library round trip from low on page 2; also verify Download and Log out once.
