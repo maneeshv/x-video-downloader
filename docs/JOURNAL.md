@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Deploy merged `main` `8e104b5` as version `77bb4325`
+- Did: fetched and detached at merged `origin/main` `8e104b5`, verified its tree includes PR #23 pending recovery and PR #24's 5 GiB file-size ceiling, and confirmed no migration or deploy-config changes since the recorded live source. The gitignored `wrangler.toml` matched the example's `xrender.uk` custom domain, origin, bindings, and cron while retaining the real IDs. `npm run check` passed both TypeScript projects, all 72 tests, and the session-doc check. `npx wrangler deploy` published version `77bb4325-73d4-427a-a9ed-a0d6b228c466` at 2026-09-02T11:01:03Z; Wrangler reports it at 100% with `xrender.uk (custom domain)` and the 30-minute cron. Unsandboxed smoke checks returned `302` for `https://xrender.uk/status` and `404` for the old workers.dev route.
+- Decided: no D1 migration was needed because `migrations/` did not change. The deployment did not save a higher operating limit or trigger Retry/Backfill; those remain explicit owner actions.
+- Learned / gotcha: production already had an unrecorded version `cf97e27d` from 2026-09-02T10:19:39Z. Its bindings and routes matched, and deploying merged `main` did not omit any repository change because `8e104b5` contains both merged PRs since the previously recorded source.
+- Left undone: authenticated `/stats` verification, selecting an operating limit above the unchanged 1 GiB default, retrying old `too_large` rows, and confirming the next cron advances `/status`.
+
 ## 2026-09-02 — Raise the maximum file-size ceiling to 5 GiB
 - Did: raised `MAX_FILE_BYTES` from 3 GiB to 5 GiB (5,368,709,120 bytes). The `/stats` form now derives its 5120 MB maximum and 5 GB hint from that constant; API/KV/downloader validation already shared it. Updated boundary/UI tests and current architecture docs. Both TypeScript projects typecheck and all 72 tests pass.
 - Decided: ADR-0017 supersedes ADR-0015 for the immutable ceiling only. The 1 GiB default, 1 MiB minimum, per-run snapshot, and separate retry/backfill actions are unchanged.
