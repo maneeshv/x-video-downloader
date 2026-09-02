@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Refresh the friend-onboarding runbook
+- Did: updated the Cloudflare Access runbook to the current **Access controls** and **Integrations → Identity providers** dashboard paths, linked the current Cloudflare identity-provider documentation, and made the viewer handoff explicit: the friend uses their own verified Cloudflare account, receives no dashboard role or Access invitation email, and is sent `https://xrender.uk` manually.
+- Decided: keep this inside the existing deploy runbook rather than create a second onboarding document; the security-critical rollout and rollback remain in one place.
+- Learned / gotcha: the policy instructions were current, but two dashboard navigation labels had drifted and the manual-link step existed only implicitly in the approved spec/conversation.
+- Left undone: authenticated owner verification and the actual Access policy/viewer rollout.
+
 ## 2026-09-02 — Publish the read-only friend access branch
 - Did: after the owner's explicit approval, pushed `explore/cloudflare-access-identity-injection` to `git@github.com-personal:maneeshv/x-video-downloader.git`. The remote branch now contains the deployed friend guard, carried duration sorting, and rollout documentation; the compare page is https://github.com/maneeshv/x-video-downloader/pull/new/explore/cloudflare-access-identity-injection.
 - Decided: no Cloudflare Access policy change is bundled with the Git push. Viewer admission remains a separate, code-first rollout after owner verification.
