@@ -144,6 +144,29 @@ If the JSON shows `seen > 0` and `downloaded == 0` (and `/status` `counts.failed
 parameter may have been renamed: change `tweet.fields` to `post.fields` in `BOOKMARK_QUERY`
 (`src/limits.ts`), redeploy, re-run `/backfill`. See `docs/research/2026-08-29-x-api-v2.md`.
 
+### Durable-poster rollout (ADR-0018)
+Do this as two deployments so X-backed rendering remains intact while existing posters are copied.
+
+1. Deploy poster capture, authenticated `/p/:postId`, combined video/poster deletion, and the
+   poster-only backfill while Library and Watch still render their existing X URLs.
+2. In an authenticated browser, open `/backfill?posters=30`. For each response, record
+   `postersStored`, `postersExisting`, `postersUnavailable`, and `posterFailures`, then pass its
+   `nextAfter` into `/backfill?posters=30&after=<nextAfter>`. Stop only when `nextAfter` is `null`.
+   The current 198-row library needs about seven requests, but request count is not proof of
+   completion.
+3. Compare the sum of successful (`postersStored + postersExisting`) and unsuccessful
+   (`postersUnavailable + posterFailures`) results with the eligible downloaded, non-deleted rows
+   whose `preview_url` is present. Investigate every unsuccessful row and rerun from the beginning
+   after transient failures; the operation is idempotent.
+4. Only after every recoverable poster is stored, deploy Library and Watch rendering with
+   same-origin `/p/<postId>` URLs.
+5. Reload the first and last Library pages and representative Watch pages. In browser network logs,
+   confirm poster requests use `/p/`, no request targets `pbs.twimg.com`, and every poster has
+   non-zero natural dimensions. An unrecoverable source must show the stable placeholder.
+
+Rollback either deploy with the normal Worker rollback below. Rolling back the rendering cutover
+restores X URLs; poster objects already copied to private R2 are harmless and can remain for retry.
+
 ### 10. Verify the cron
 After ≤30 minutes, dashboard → Worker → **Cron Events** shows a successful invocation, and
 `${PUBLIC_ORIGIN}/status` `lastRun` has advanced. Check console.x.com → usage: a handful of reads

@@ -74,6 +74,14 @@ test("putVideo stores metadata as strings; has() reflects R2", async () => {
   assert.equal(r2.objects.get("1.mp4")!.contentType, "video/mp4");
 });
 
+test("poster storage uses the deterministic key and preserves image metadata", async () => {
+  const { s, r2 } = mk();
+  await s.putPoster("12345", new Response(new Uint8Array([0xff, 0xd8])).body!, "image/jpeg");
+  assert.equal(await s.putPoster("12345", new Response(new Uint8Array([1])).body!, "image/png"), null, "an overlapping capture cannot overwrite the immutable poster");
+  assert.equal(r2.objects.get("posters/12345")?.contentType, "image/jpeg");
+  assert.ok(await s.getPoster("12345", new Headers()));
+});
+
 test("migration 0002: library columns exist and default to unset", async () => {
   const { s } = mk();
   await s.upsertBookmark(row());
@@ -148,7 +156,7 @@ test("updateMeta is partial, stores empty strings as NULL, and touches only live
 test("markDeleted is idempotent and keeps the first timestamp; deleteVideos removes every sibling key", async () => {
   const { s, r2 } = mk();
   await dl(s, "1", { r2_key: "1-1.mp4" });
-  for (const k of ["1-1.mp4", "1-2.mp4", "10.mp4"]) await r2.put(k, new Uint8Array([1]));
+  for (const k of ["1-1.mp4", "1-2.mp4", "posters/1", "10.mp4"]) await r2.put(k, new Uint8Array([1]));
   assert.ok(await s.markDeleted("1", "2026-08-30T00:00:00Z"));
   assert.ok(await s.markDeleted("1", "2026-08-31T00:00:00Z"), "a repeat delete still reports a match");
   assert.equal((await s.getBookmark("1"))!.deleted_at, "2026-08-30T00:00:00Z");
@@ -182,6 +190,16 @@ test("listPendingIds returns the oldest pending rows first and respects its limi
   await s.upsertBookmark(row({ post_id: "1", now: "2026-08-01T00:00:00Z" }));
   await s.upsertBookmark(row({ post_id: "4", status: "failed", now: "2026-07-01T00:00:00Z" }));
   assert.deepEqual(await s.listPendingIds(2), ["1", "2"]);
+});
+
+test("listPosterSources selects live downloaded rows using a stable keyset", async () => {
+  const { s } = mk();
+  await dl(s, "11111", { preview_url: "https://pbs.twimg.com/a.jpg" });
+  await dl(s, "22222", { preview_url: "https://pbs.twimg.com/b.jpg" });
+  await dl(s, "33333", { preview_url: null });
+  await s.markDeleted("11111", "2026-09-02T00:00:00Z");
+  assert.deepEqual((await s.listPosterSources(null, 10)).map((x) => x.post_id), ["22222"]);
+  assert.deepEqual(await s.listPosterSources("22222", 10), []);
 });
 
 test("retry resets a failed row to pending and clears its error; other rows untouched", async () => {
