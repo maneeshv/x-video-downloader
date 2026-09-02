@@ -35,7 +35,7 @@ const watchHref = (postId: string, q: LibraryQuery) => {
 
 const CSS = `:root{color-scheme:dark;--bg:#090b0e;--surface:#11151a;--surface-2:#171c22;--line:#272d35;--line-strong:#3a424c;--text:#f4f1ea;--muted:#9299a3;--accent:#e7a83b;--accent-soft:#2b2316;--danger:#ff766d;--radius:14px;--shadow:0 18px 60px rgba(0,0,0,.28)}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
-.skip{position:fixed;left:1rem;top:-4rem;z-index:20;background:var(--text);color:var(--bg);padding:.65rem 1rem;border-radius:8px}.skip:focus{top:1rem}.app-bar{position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(9,11,14,.86);backdrop-filter:blur(18px)}.app-bar-inner{width:min(1480px,100%);min-height:68px;margin:auto;padding:0 clamp(1rem,3vw,2.5rem);display:flex;align-items:center;gap:1rem}.brand{font-size:1rem;font-weight:760;letter-spacing:-.02em;white-space:nowrap}.brand span{color:var(--accent)}.header-context{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.header-actions{margin-left:auto;display:flex;align-items:center;gap:.4rem}.nav-link,.button,.filter-toggle,.page-link{min-height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:10px;padding:.55rem .82rem;font-weight:650;line-height:1;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}.nav-link{color:var(--muted)}.nav-link:hover{color:var(--text);background:var(--surface-2)}
+.skip{position:fixed;left:1rem;top:-4rem;z-index:20;background:var(--text);color:var(--bg);padding:.65rem 1rem;border-radius:8px}.skip:focus{top:1rem}.app-bar{position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(9,11,14,.86);backdrop-filter:blur(18px)}.app-bar-inner{width:min(1480px,100%);min-height:68px;margin:auto;padding:0 clamp(1rem,3vw,2.5rem);display:flex;align-items:center;gap:1rem}.brand{font-size:1rem;font-weight:760;letter-spacing:-.02em;white-space:nowrap}.brand span{color:var(--accent)}.header-context{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.header-actions{margin-left:auto;display:flex;align-items:center;gap:.4rem}.view-only{border:1px solid #6e5428;border-radius:999px;background:var(--accent-soft);color:#f3c878;padding:.3rem .55rem;font-size:.68rem;font-weight:760;letter-spacing:.04em;white-space:nowrap}.nav-link,.button,.filter-toggle,.page-link{min-height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:10px;padding:.55rem .82rem;font-weight:650;line-height:1;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}.nav-link{color:var(--muted)}.nav-link:hover{color:var(--text);background:var(--surface-2)}
 main{animation:page-in .34s ease both}@keyframes page-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}.library-shell,.stats-shell{width:min(1480px,100%);margin:auto;padding:clamp(1.6rem,4vw,3.5rem) clamp(1rem,3vw,2.5rem) 3rem}.library-intro{display:flex;align-items:end;justify-content:space-between;gap:2rem;margin-bottom:1.5rem}.eyebrow{margin:0 0 .35rem;color:var(--accent);font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.library-intro h1,.watch-heading h1,.stats-heading h1{margin:0;font-size:clamp(2rem,5vw,3.9rem);line-height:.96;letter-spacing:-.055em;font-weight:760}.library-summary{margin:.65rem 0 0;color:var(--muted);max-width:48rem}.result-total{font-variant-numeric:tabular-nums;color:var(--text)}
 .library-controls{display:grid;grid-template-columns:minmax(240px,1fr) auto auto auto;gap:.65rem;align-items:end;padding:1rem 0 1.15rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:1.5rem}.field{display:grid;gap:.35rem}.field-label{color:var(--muted);font-size:.72rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}.control,input,select,textarea{width:100%;min-height:42px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);padding:.62rem .75rem;outline:none;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}input::placeholder,textarea::placeholder{color:#6f7782}input:hover,select:hover,textarea:hover{border-color:var(--line-strong)}input:focus-visible,select:focus-visible,textarea:focus-visible,.button:focus-visible,.nav-link:focus-visible,.filter-toggle:focus-visible,.page-link:focus-visible,.video-card:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(231,168,59,.18)}.search-field{position:relative}.search-field input{padding-right:5.5rem}.search-button{position:absolute;right:.3rem;bottom:.3rem;min-height:34px;border:0;border-radius:8px;background:var(--text);color:var(--bg);padding:.35rem .75rem;font-weight:760;cursor:pointer}.filter-toggle{min-height:42px;border-color:var(--line);background:var(--surface);color:var(--muted)}.filter-toggle:hover{border-color:var(--line-strong);color:var(--text)}.filter-toggle.on{border-color:#6e5428;background:var(--accent-soft);color:#f3c878}
 .video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:clamp(1rem,2vw,1.6rem)}.video-card{display:block;min-width:0;border-radius:var(--radius);scroll-margin-top:92px;outline:none}.poster{position:relative;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-2);box-shadow:0 0 0 rgba(0,0,0,0);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.poster img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .32s cubic-bezier(.2,.7,.2,1),filter .2s ease}.video-card:hover .poster,.video-card:focus-visible .poster{transform:translateY(-3px);border-color:var(--line-strong);box-shadow:var(--shadow)}.video-card:hover .poster img,.video-card:focus-visible .poster img{transform:scale(1.035);filter:brightness(1.04)}.favorite-badge{position:absolute;top:.7rem;right:.7rem;border:1px solid rgba(255,224,169,.28);border-radius:999px;background:rgba(24,18,10,.88);color:#f4ca80;padding:.28rem .55rem;font-size:.68rem;font-weight:760;letter-spacing:.04em}.card-meta{padding:.78rem .15rem .1rem}.video-title{display:-webkit-box;min-height:2.8em;margin:0 0 .35rem;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;color:var(--text);font-size:.98rem;font-weight:680;line-height:1.38;letter-spacing:-.015em}.video-details{display:flex;align-items:center;gap:.45rem;color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}.separator{color:#525a64}.empty{grid-column:1/-1;text-align:center;padding:7rem 1rem;border-bottom:1px solid var(--line)}.empty h2{margin:0 0 .4rem;font-size:1.35rem}.empty p{margin:0;color:var(--muted)}.empty a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
@@ -51,10 +51,10 @@ main{animation:page-in .34s ease both}@keyframes page-in{from{opacity:0;transfor
 const page = (t: string, body: string) =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090b0e"><title>${esc(t)} · x-downloader</title><style>${CSS}</style></head><body><a class="skip" href="#content">Skip to content</a>${body}</body></html>`;
 
-const appHeader = (context: string, actions: string) => `<header class="app-bar"><div class="app-bar-inner">
+const appHeader = (context: string, actions: string, isOwner = true) => `<header class="app-bar"><div class="app-bar-inner">
   <a class="brand" href="/">x<span>-</span>downloader</a>
   <span class="header-context">${context}</span>
-  <nav class="header-actions" aria-label="Account and application">${actions}<a class="nav-link" href="/cdn-cgi/access/logout">Log out</a></nav>
+  <nav class="header-actions" aria-label="Account and application">${isOwner ? "" : '<span class="view-only">View only</span>'}${actions}<a class="nav-link" href="/cdn-cgi/access/logout">Log out</a></nav>
 </div></header>`;
 
 const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
@@ -68,7 +68,7 @@ const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
   return values;
 };
 
-export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length): string {
+export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length, isOwner = true): string {
   const pageNumber = q.page ?? 1, perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const link = (over: Partial<LibraryQuery>) => libraryHref({ ...q, ...over });
@@ -86,8 +86,8 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
     ${pageNumber < totalPages ? `<a class="page-link" href="${esc(link({ page: pageNumber + 1 }))}" aria-label="Next page">Next</a>` : '<span class="page-link disabled" aria-hidden="true">Next</span>'}
   </nav>` : "";
   const headerContext = `Last synced ${esc(status.lastRun ?? "never")}`;
-  const headerActions = `<a class="nav-link desktop-only" href="/stats">Stats</a>${status.auth === "needs_reauth" ? '<a class="nav-link" href="/oauth/start">Re-authorize</a>' : ""}`;
-  return page("Library", `${appHeader(headerContext, headerActions)}
+  const headerActions = isOwner ? `<a class="nav-link desktop-only" href="/stats">Stats</a>${status.auth === "needs_reauth" ? '<a class="nav-link" href="/oauth/start">Re-authorize</a>' : ""}` : "";
+  return page("Library", `${appHeader(headerContext, headerActions, isOwner)}
 <main id="content" class="library-shell">
   <section class="library-intro" aria-labelledby="library-title"><div><p class="eyebrow">Your collection</p><h1 id="library-title">Video library</h1><p class="library-summary"><span class="result-total">${total} ${total === 1 ? "video" : "videos"}</span>${q.q ? ` matching “${esc(q.q)}”` : " ready to watch"}${q.fav ? ", favourites only" : ""}.</p></div></section>
   <form class="library-controls" method="get" action="/">
@@ -102,32 +102,34 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
 </main>`);
 }
 
-export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}): string {
+export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true): string {
   const backToLibrary = libraryHref(q, `#video-${r.post_id}`), deleteReturn = libraryHref(q);
-  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`)}
-<main id="content" class="watch-shell">
-  <div class="watch-layout">
-    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video></div>
-    <section class="watch-panel" aria-labelledby="watch-title">
-      <header class="watch-heading"><p class="eyebrow">Library video</p><h1 id="watch-title">${esc(title(r))}</h1><p class="watch-byline">Saved ${esc(day(r))} · ${mb(r.bytes)}</p></header>
-      <form id="meta" class="meta-form">
+  const ownerControls = isOwner ? `<form id="meta" class="meta-form">
         <label class="field"><span class="field-label">Title</span><input name="title" maxlength="200" placeholder="Add a title" value="${esc(r.title)}"></label>
         <label class="field"><span class="field-label">Description</span><textarea name="description" maxlength="2000" placeholder="Add a description">${esc(r.description)}</textarea></label>
         <div class="form-actions"><button class="button primary" type="submit">Save details</button><button type="button" id="fav" class="button${r.favorite ? " on" : ""}">${r.favorite ? "Favourited" : "Add to favourites"}</button><button type="button" id="del" class="button danger">Delete video</button></div>
         <span id="msg" class="save-message" role="status" aria-live="polite"></span>
-      </form>
-      <p class="source-copy">${esc(r.text)}</p>
-      <p class="source-links"><a href="${url(r.post_url)}">Original post</a><span>·</span><a href="/v/${esc(r.r2_key)}" download>Download file</a><span>·</span><span>${mb(r.bytes)}</span></p>
-    </section>
-  </div>
-</main>
-<script>
+      </form>` : r.description ? `<p class="source-copy">${esc(r.description)}</p>` : "";
+  const ownerScript = isOwner ? `<script>
 const api="/api/videos/${esc(r.post_id)}",msg=document.getElementById("msg"),backToLibrary=${js(deleteReturn)};let fav=${r.favorite ? "true" : "false"};
 async function send(method,body){const res=await fetch(api,{method,headers:body?{"content-type":"application/json"}:{},body:body&&JSON.stringify(body)});if(!res.ok){alert(method+" failed: "+res.status);return false}return true}
 document.getElementById("meta").onsubmit=async e=>{e.preventDefault();const f=e.target;if(await send("POST",{title:f.title.value,description:f.description.value})){msg.textContent="Saved";setTimeout(()=>msg.textContent="",1800)}};
 document.getElementById("fav").onclick=async()=>{if(await send("POST",{favorite:!fav})){fav=!fav;const b=document.getElementById("fav");b.classList.toggle("on",fav);b.textContent=fav?"Favourited":"Add to favourites"}};
 document.getElementById("del").onclick=async()=>{if(confirm("Delete this video from storage? This cannot be undone.")&&await send("DELETE"))location.href=backToLibrary};
-</script>`);
+</script>` : "";
+  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
+<main id="content" class="watch-shell">
+  <div class="watch-layout">
+    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video></div>
+    <section class="watch-panel" aria-labelledby="watch-title">
+      <header class="watch-heading"><p class="eyebrow">Library video</p><h1 id="watch-title">${esc(title(r))}</h1><p class="watch-byline">Saved ${esc(day(r))} · ${mb(r.bytes)}</p></header>
+      ${ownerControls}
+      <p class="source-copy">${esc(r.text)}</p>
+      <p class="source-links"><a href="${url(r.post_url)}">Original post</a><span>·</span><a href="/v/${esc(r.r2_key)}" download>Download file</a><span>·</span><span>${mb(r.bytes)}</span></p>
+    </section>
+  </div>
+</main>
+${ownerScript}`);
 }
 
 // Stat tiles + tables, no charts: there is no time series to plot, only current counts.

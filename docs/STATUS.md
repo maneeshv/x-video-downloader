@@ -1,24 +1,23 @@
 Updated: 2026-09-02
 
 ## Now
-- **Branch `fix/library-duration-unavailable` is live as Worker version `36bc3020-0d82-4549-9293-8fe3917ddad8`:** `GET /backfill?durations=1` repaired 116 of 133 missing durations in two X lookup requests with zero video downloads. Production D1 now has 181/198 live downloaded rows with duration and 17 unavailable; the read-back query wrote zero rows. Both TypeScript projects and all 75 tests pass. The branch is pushed but not merged.
-- **The deployed feature branch contains current `origin/main` `b664765`:** production therefore also has the merged 5 GiB file-size ceiling and Library largest/smallest sorting.
-- **Rollback target:** Worker version `3c22564d-6e55-454f-a4f1-6b6517546eee`, which was at 100% before this deployment. The custom domain still redirects unauthenticated requests to Access and the old workers.dev route remains disabled (404).
-- **Last observed real account state (2026-08-31):** 190 downloaded / 0 pending / 8 `too_large` / 56 no video / 1 deleted / 35.91 GB R2. Those 8 old failures have blank sizes until retried once.
+- **Read-only friend access is implemented locally:** [`spec`](superpowers/specs/2026-09-02-read-only-friend-access-design.md), [ADR-0018](decisions/0018-cloudflare-exact-email-read-only-viewers.md), and [`implementation plan`](superpowers/plans/2026-09-02-read-only-friend-access.md). The fail-closed Worker guard, viewer-safe UI, `OWNER_EMAIL`, config/runbook updates, and complete route tests pass all 78 tests; no Access policy has been broadened.
+- **Production still runs Worker version `36bc3020-0d82-4549-9293-8fe3917ddad8`:** its duration repair is now merged in `origin/main` `94055d4`; production has duration for 181/198 live downloaded rows. The friend-access guard is not deployed yet, and Access remains account-members-only.
+- **Rollout order remains security-critical:** the implementation is rebased onto current `origin/main`; deploy and verify the owner guard first, then replace Access admission with exact emails only after viewer addresses are supplied.
 
 ## Next
-1. Review and merge `fix/library-duration-unavailable`; production is already running its code.
-2. Decide whether the 17 rows still unavailable from X justify a separate R2/MP4 metadata extraction path.
-3. Save the desired operating file limit on `/stats` and explicitly retry/backfill old `too_large` rows if the merged 5 GiB ceiling is newly deployed.
-4. Verify a 50/page library round trip from low on page 2; also verify Download and Log out once.
-5. Owner: update the main checkout's gitignored `/Users/maneesh/Developer/personal-project/x-downloader/wrangler.toml` to match `wrangler.toml.example` so future worktrees stop inheriting the stale workers.dev origin.
+1. Rerun checks, deploy the guard with the verified owner email, and verify owner behavior before changing Access.
+2. Obtain one viewer's exact verified Cloudflare-account email; then execute the existing-app exact-email policy rollout and second/non-listed account tests.
+3. Update the main checkout's gitignored `wrangler.toml` with `OWNER_EMAIL` so new Paseo worktrees do not omit it.
+4. Decide whether the 17 remaining duration-unavailable rows justify R2/MP4 inspection.
+5. Save the desired operating file limit on `/stats` and explicitly retry/backfill old `too_large` rows if wanted.
 
 ## Blocked
-- Nothing agent-side.
+- Viewer admission awaits at least one friend's exact verified Cloudflare-account email and access to a separate non-listed account for the negative test; neither blocks deploying the guard.
 
 ## Done recently (last 5; older in JOURNAL)
+- 2026-09-02 Read-only friend Worker guard, viewer-safe UI, configuration, and route matrix implemented; 78 tests pass; deployment and Access policy change remain.
 - 2026-09-02 Duration repair deployed and run: 181/198 live Library rows now have duration; 17 remain unavailable.
+- 2026-09-02 Exact-email, owner-versus-viewer Cloudflare Access design approved; ADR-0018 and its implementation plan are frozen.
 - 2026-09-02 Library duration data flow deployed as `3c22564d`; migration applied and Paseo backfill/browser verification completed.
 - 2026-09-02 Library sorting by largest/smallest file size implemented and verified on `fix/library-sort-by-size`; not deployed.
-- 2026-09-02 File-size ceiling raised locally from 3 GiB to 5 GiB; 72 tests and both TypeScript projects pass; not deployed.
-- 2026-09-02 Targeted D1 pending recovery implemented on `fix/pending-drain`; 72 tests and both TypeScript projects pass; not deployed.

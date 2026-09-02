@@ -3,10 +3,10 @@
 Updated: 2026-09-02
 
 Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
-(ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Live since
-2026-08-30: Access (Cloudflare identity provider, account-members policy), X OAuth 2.0 client, Telegram
-alerts all configured; proven on a test account (142 videos), store wiped, then backfilled from the
-owner's real account (`docs/STATUS.md`). Deploys are manual `wrangler deploy`; CI runs typecheck + tests
+(ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Access uses the
+Cloudflare identity provider; the Worker derives owner/viewer authorization from the verified email
+(ADR-0018). Production admission remains account-members-only until the guarded rollout recorded in
+`docs/STATUS.md`. X OAuth 2.0 and Telegram alerts are configured. Deploys are manual `wrangler deploy`; CI runs typecheck + tests
 (ADR-0010). The library UI supports search/filter/sort, per-video title, description, favourite, and
 delete (ADR-0011); since 2026-09-02 it also uses URL-backed pagination and restores the originating
 card after a watch-page round trip (ADR-0016).
@@ -25,7 +25,8 @@ card after a watch-page round trip (ADR-0016).
 
 ## Vars (`[vars]`, not secret)
 `TEAM_DOMAIN` (Zero Trust team domain), `POLICY_AUD` (Access app AUD tag), `PUBLIC_ORIGIN`
-(exact Worker origin; OAuth callback = `${PUBLIC_ORIGIN}/oauth/callback`).
+(exact Worker origin; OAuth callback = `${PUBLIC_ORIGIN}/oauth/callback`), `OWNER_EMAIL` (verified
+Cloudflare Login email that receives owner capabilities; missing/blank matches nobody).
 
 ## Secrets (`wrangler secret put`)
 `X_CLIENT_ID`, `X_CLIENT_SECRET` (X OAuth 2.0 confidential client), `TELEGRAM_BOT_TOKEN`,
@@ -35,10 +36,14 @@ are set; alerts silently no-op otherwise).
 ## Routes (`src/index.ts` `handle()`)
 Every route (including `/oauth/callback`) requires header `cf-access-jwt-assertion`, verified by
 `verifyAccessJwt` (`src/access.ts`, ADR-0004) against `TEAM_DOMAIN`/`POLICY_AUD` — missing or
-invalid JWT → 403 before any other logic runs.
+invalid JWT or a missing/blank signed email → 403 before any other logic runs. `handle()` trims and
+case-folds that verified email and `OWNER_EMAIL`. The owner retains all routes; every other admitted
+email may only use `GET /`, `GET /watch/:postId`, and `GET /v/:key` (including Range). Every other
+current or future route returns 403 before KV, D1, R2, or X work. This positive allowlist is required
+because `/oauth/start`, `/oauth/callback`, and `/backfill` are state-changing or billable GETs.
 All HTML pages (`/`, `/watch/:id`, `/stats`) carry a "Log out" link to `/cdn-cgi/access/logout`; Cloudflare answers that path at the edge (clears the Access cookie for this hostname and revokes the session across all Access apps — there is no per-app logout), so it never reaches the Worker and has no route here. Source: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ (read 2026-08-30).
-- `GET /?q=&fav=1&sort=newest|oldest|title|largest|smallest&page=N&perPage=10|20|30|50` — parses a canonical `LibraryQuery` (default page/page-size = 1/10; invalid values fall back; an out-of-range page clamps to the last page), gets the matching total from `store.countLibrary()`, then calls `store.listLibrary(query, perPage, offset)` (`status='downloaded' AND deleted_at IS NULL`, `LIKE` over title/description/text, safe sort allow-list, `LIMIT`/`OFFSET`) and `renderIndex()`. Cards show date, stored file size, and X's `duration_ms` formatted as `m:ss`/`h:mm:ss`; missing durations are explicit. Size sorts use the stored `bytes` value and place rows with an unknown size last. Search/favourite/sort/page-size changes reset to page 1; page links and cards retain active state (ADR-0016).
-- `GET /watch/:postId` — `renderWatch()` over `store.getBookmark(postId)`. Library query fields carried on the watch URL are validated through the same parser; Back to library reconstructs the originating URL with `#video-<postId>` so the card returns to view, and delete returns to the same page without the now-missing anchor (ADR-0016). The header also carries a "Download" link: `<a href="/v/<r2_key>" download="<postId>.mp4">` — same URL the player streams, saved via the native `download` attribute (same-origin, so no `Content-Disposition` header is needed; MDN, read 2026-08-31). `postId` must match `POST_ID_RE` (`src/limits.ts`); 404 unless the row is `status='downloaded'`, `deleted_at` unset, and `r2_key` set.
+- `GET /?q=&fav=1&sort=newest|oldest|title|largest|smallest&page=N&perPage=10|20|30|50` — parses a canonical `LibraryQuery` (default page/page-size = 1/10; invalid values fall back; an out-of-range page clamps to the last page), gets the matching total from `store.countLibrary()`, then calls `store.listLibrary(query, perPage, offset)` (`status='downloaded' AND deleted_at IS NULL`, `LIKE` over title/description/text, safe sort allow-list, `LIMIT`/`OFFSET`) and `renderIndex()`. Cards show date, stored file size, and X's `duration_ms` formatted as `m:ss`/`h:mm:ss`; missing durations are explicit. Size sorts use the stored `bytes` value and place rows with an unknown size last. Search/favourite/sort/page-size changes reset to page 1; page links and cards retain active state (ADR-0016). Viewers see `View only` and no Stats or Re-authorize links.
+- `GET /watch/:postId` — `renderWatch()` over `store.getBookmark(postId)`. Library query fields carried on the watch URL are validated through the same parser; Back to library reconstructs the originating URL with `#video-<postId>` so the card returns to view, and delete returns to the same page without the now-missing anchor (ADR-0016). The header also carries a "Download" link: `<a href="/v/<r2_key>" download="<postId>.mp4">` — same URL the player streams, saved via the native `download` attribute (same-origin, so no `Content-Disposition` header is needed; MDN, read 2026-08-31). Owners receive the metadata form and mutation script; viewers receive an escaped static description and no mutation controls or script. `postId` must match `POST_ID_RE` (`src/limits.ts`); 404 unless the row is `status='downloaded'`, `deleted_at` unset, and `r2_key` set.
 - `POST /api/videos/:postId` — body JSON `{title?, description?, favorite?}`. 415 unless `content-type` starts with `application/json` (no CSRF token needed: a cross-site `<form>` cannot set this header); 400 on an unparsable body, a body naming no known field, or a wrongly-typed field; 413 when `title` exceeds `TITLE_MAX`=200 or `description` exceeds `DESCRIPTION_MAX`=2000; 404 when `store.updateMeta` matches no `downloaded`, non-deleted row; 204 on success.
 - `DELETE /api/videos/:postId` — 404 unless the row is `status='downloaded'`; otherwise `store.deleteVideos(postId)` (R2 delete of `<id>.mp4` and `<id>-1..4.mp4`) then `store.markDeleted(postId, now)`, in that order (ADR-0011: no tombstone for a video still in R2), then subtracts the row's `bytes` from KV `status.totalBytes` (clamped at 0, only when `deleted_at` was null before this call), then 204. Idempotent: a repeat delete on an already-`downloaded` row (R2 delete of an already-missing key is a no-op) still 204s and does not subtract again.
 - `GET /v/:key` — streams a video from R2. `key` must match `VIDEO_KEY_RE` (`src/limits.ts`) or 404. Supports `Range` (206 + `Content-Range`, via `servedRange()` which normalizes all three `R2Range` shapes) and conditional revalidation: 304 when the request carried If-None-Match or If-Modified-Since and R2 dropped the body; 412 otherwise; 416 only when the request carried a Range header and R2 rejected it (any other `getVideo` throw propagates instead of being reported as a client-facing 416). Malformed `%`-escapes in the key 404 instead of throwing. A deleted video's key is simply gone from R2, so this 404s naturally.
@@ -97,4 +102,4 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
 --test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
 0009 (refuse unknown-length video bodies instead of buffering), 0011 (library metadata in D1;
-delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling).
+delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling), 0018 (exact-email viewers and Worker owner authorization).

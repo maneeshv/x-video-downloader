@@ -7,7 +7,7 @@ import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type F
 
 export type AppEnv = {
   X_CLIENT_ID: string; X_CLIENT_SECRET: string; TELEGRAM_BOT_TOKEN?: string; TELEGRAM_CHAT_ID?: string;
-  TEAM_DOMAIN: string; POLICY_AUD: string; PUBLIC_ORIGIN: string;
+  TEAM_DOMAIN: string; POLICY_AUD: string; PUBLIC_ORIGIN: string; OWNER_EMAIL: string;
   VIDEOS: R2Bucket; KV: KVNamespace; DB: D1Database;
 };
 
@@ -95,8 +95,17 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   const url = new URL(req.url);
   // Every route, including the OAuth callback, sits behind Access (spec §4); the JWT check defends a misconfigured policy.
   const jwt = req.headers.get("cf-access-jwt-assertion");
-  try { if (!jwt) throw new Error("missing"); await verifyAccessJwt(f, jwt, env.TEAM_DOMAIN, env.POLICY_AUD); }
+  let email = "";
+  try {
+    if (!jwt) throw new Error("missing");
+    const identity = await verifyAccessJwt(f, jwt, env.TEAM_DOMAIN, env.POLICY_AUD);
+    if (typeof identity.email !== "string" || !identity.email.trim()) throw new Error("missing email");
+    email = identity.email.trim();
+  }
   catch { return new Response("forbidden", { status: 403 }); }
+  const isOwner = !!env.OWNER_EMAIL?.trim() && email.toLowerCase() === env.OWNER_EMAIL.trim().toLowerCase();
+  const viewerPath = url.pathname === "/" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/v\/[^/]+$/.test(url.pathname);
+  if (!isOwner && (req.method !== "GET" || !viewerPath)) return new Response("forbidden", { status: 403 });
 
   const d = deps(env, f);
   const { store } = d;
@@ -155,14 +164,14 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     const perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     q.page = Math.min(q.page ?? 1, totalPages);
-    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total));
+    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner));
   }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {
     if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
     const b = await store.getBookmark(watch[1]!);
     if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
-    return html(renderWatch(b, parseLibraryQuery(url)));
+    return html(renderWatch(b, parseLibraryQuery(url), isOwner));
   }
   if (url.pathname.startsWith("/v/")) {
     let key: string;
