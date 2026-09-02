@@ -191,6 +191,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     return Response.redirect(`${env.PUBLIC_ORIGIN}/`, 302);
   }
   if (url.pathname === "/backfill") {
+    if (url.searchParams.get("durations") === "1") return json(await sync(d, { durations: true }));
     // ?downloads=N lets the owner drain a backlog faster than the cron's per-run cap; clamped to a hard ceiling.
     const n = Number(url.searchParams.get("downloads")) || MAX_DOWNLOADS_PER_RUN;
     return json(await sync(d, { backfill: true, maxDownloads: Math.min(Math.max(1, n), BACKFILL_MAX_DOWNLOADS) }));
