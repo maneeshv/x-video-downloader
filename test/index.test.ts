@@ -271,7 +271,7 @@ test("/stats shows counts, failures by reason, and the pending/failed posts; / l
     'data-stat="downloaded">1<', 'data-stat="pending">1<', 'data-stat="failed">2<', 'data-stat="no_video">1<', 'data-stat="deleted">1<',
     'data-stat="bytes">5 B<', "too_large</td><td>2", "&lt;b&gt;big&lt;/b&gt; one", "2026-08-30T12:00:00Z", "storage", "seen 20",
     'href="https://x.com/i/status/33333"', 'data-retry="22222"', 'href="/backfill', "<th>Size</th>", '<td>1536.0 MB</td><td><button type="button" data-retry="22222"',
-    'id="max-file-mb"', 'value="1024"', 'max="3072"', '3 GB hard maximum',
+    'id="max-file-mb"', 'value="1024"', 'max="5120"', '5 GB hard maximum',
   ]) assert.ok(body.includes(needle), needle);
   assert.ok(!body.includes("<b>big</b>"), "text is escaped");
   assert.ok((await (await a.get("/")).text()).includes('href="/stats"'), "library header links to /stats");
@@ -285,7 +285,7 @@ test("POST /api/settings/max-file-bytes validates and persists the stats-page li
   for (const value of [null, "1", 1.5, MIN_FILE_BYTES - 1, MAX_FILE_BYTES + 1]) {
     assert.equal((await jsonPost(a, path, { maxFileBytes: value })).status, 400, String(value));
   }
-  assert.equal((await jsonPost(a, path, { maxFileBytes: MAX_FILE_BYTES })).status, 204, "3 GiB boundary is accepted");
+  assert.equal((await jsonPost(a, path, { maxFileBytes: MAX_FILE_BYTES })).status, 204, "5 GiB boundary is accepted");
   const selected = 1536 * 1024 ** 2;
   assert.equal((await jsonPost(a, path, { maxFileBytes: selected })).status, 204);
   assert.equal(await a.store.getMaxFileBytes(), selected);

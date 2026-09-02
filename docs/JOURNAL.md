@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-02 — Raise the maximum file-size ceiling to 5 GiB
+- Did: raised `MAX_FILE_BYTES` from 3 GiB to 5 GiB (5,368,709,120 bytes). The `/stats` form now derives its 5120 MB maximum and 5 GB hint from that constant; API/KV/downloader validation already shared it. Updated boundary/UI tests and current architecture docs. Both TypeScript projects typecheck and all 72 tests pass.
+- Decided: ADR-0017 supersedes ADR-0015 for the immutable ceiling only. The 1 GiB default, 1 MiB minimum, per-run snapshot, and separate retry/backfill actions are unchanged.
+- Learned / gotcha: the form duplicated the ceiling as literals; deriving it from `MAX_FILE_BYTES` removes that drift point.
+- Left undone: not merged or deployed. Production remains at the 3 GiB ceiling until deployment, and a saved operating limit remains unchanged until the owner selects a higher value.
+
 ## 2026-09-02 — Drain D1 pending videos before bookmark pagination (branch `fix/pending-drain`)
 - Did: `sync()` now selects the oldest pending D1 post IDs, rehydrates their current media variants with one batched `GET /2/tweets?ids=...`, and sends the returned items through the existing `processItem()` before scanning bookmarks. The lookup shares the existing download budget and file-size snapshot; IDs returned again by bookmark pagination are skipped for that run, while IDs omitted by X stay pending. Added focused Store, X-request, and sync integration tests and updated affected route fakes. TDD red covered the missing selector/helper/drain; `npm test` is green at 72 tests and both TypeScript projects typecheck.
 - Decided: amend ADR-0005's normal-run request cap from 3 to 4 for the optional pending lookup. No endpoint, script, schema migration, persisted media URL, or dependency: cron and the existing `/backfill` path both self-heal pending rows.

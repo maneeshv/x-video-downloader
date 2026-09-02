@@ -184,7 +184,7 @@ test("sync snapshots the owner-selected max file bytes once per run", async () =
   const r = await sync(w.d);
   assert.equal(r.downloaded, 0);
   assert.equal(r.failed, 2);
-  assert.equal(w.r2.objects.size, 0, "both videos use the 1 MiB snapshot even after KV changes to 3 GiB");
+  assert.equal(w.r2.objects.size, 0, "both videos use the 1 MiB snapshot even after KV changes to 5 GiB");
   assert.deepEqual((await w.store.listByStatus(["failed"])).map((x) => x.error), ["too_large", "too_large"]);
 });
 

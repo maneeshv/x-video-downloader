@@ -34,7 +34,7 @@ A marker in the wrong file is a bug (e.g. `DECIDED` outside an ADR).
 - TypeScript on Cloudflare Workers via `wrangler`; no web framework unless an ADR says so.
 - Absolute imports only (owner preference). Configure `tsconfig` `paths` + `baseUrl` accordingly.
 - Every magic string (X GraphQL queryId, bearer token, feature flags JSON, header set) lives in one file with a comment saying where it came from and how to refresh it.
-- Hard safety bounds (max requests/downloads per run, absolute max file size, storage alert) are **constants in code**, not environment config. The file-size operating limit is owner-adjustable in KV but cannot exceed the code ceiling (ADR-0015). See `docs/research/2026-08-29-persona-security.md`.
+- Hard safety bounds (max requests/downloads per run, absolute max file size, storage alert) are **constants in code**, not environment config. The file-size operating limit is owner-adjustable in KV but cannot exceed the code ceiling (ADR-0015, raised by ADR-0017). See `docs/research/2026-08-29-persona-security.md`.
 - No `TODO` comments. Deliberate ceilings use `// ponytail: <what and when to upgrade>`. Decisions go to QUESTIONS; work goes to STATUS.
 - Never log a secret. One helper builds the auth headers; log only status codes and URL paths.
 - When a check rejects on a measured value (size, count, duration, status), persist the value alongside the error — never just the label. A bare `too_large` cost a session on 2026-08-31: `download()` read `Content-Length` to refuse the file and discarded it, so `/stats` had no size to show for 52 failed rows until they were re-fetched.
