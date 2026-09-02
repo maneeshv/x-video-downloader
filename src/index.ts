@@ -84,7 +84,7 @@ function parseLibraryQuery(url: URL): LibraryQuery {
   return {
     q: url.searchParams.get("q")?.trim() || undefined,
     fav: url.searchParams.get("fav") === "1",
-    sort: sort === "oldest" || sort === "title" ? sort : "newest",
+    sort: sort === "oldest" || sort === "title" || sort === "largest" || sort === "smallest" ? sort : "newest",
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     perPage: LIBRARY_PAGE_SIZES.includes(rawPerPage as typeof LIBRARY_PAGE_SIZES[number])
       ? rawPerPage as typeof LIBRARY_PAGE_SIZES[number] : DEFAULT_LIBRARY_PAGE_SIZE,

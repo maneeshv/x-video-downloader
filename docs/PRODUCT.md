@@ -13,7 +13,7 @@ One person: the owner, using their own X account and bookmarks. The project may 
 2. A scheduled job in the cloud notices the new bookmark.
 3. The video file is downloaded to the owner's cloud storage, and the job remembers it so it is never downloaded twice.
 4. Owner browses a paginated library page (`/`) — search, favourites filter, sort by
-   newest/oldest/title, and 10/20/30/50 videos per page — and opens a per-video watch page
+   newest/oldest/title/largest/smallest, and 10/20/30/50 videos per page — and opens a per-video watch page
    (`/watch/:id`) to play the video, set a title/description, toggle favourite, or delete it. Back to
    library restores the originating query, page, and card position (ADR-0011, ADR-0016).
 
