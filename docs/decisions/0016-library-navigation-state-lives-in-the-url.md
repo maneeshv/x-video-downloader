@@ -1,4 +1,4 @@
-# 0015. Library navigation state lives in the URL
+# 0016. Library navigation state lives in the URL
 Date: 2026-09-02 | Status: DECIDED | Supersedes: — | Evidence: `docs/superpowers/specs/2026-09-02-library-pagination-modern-ui-design.md`
 
 ## Context

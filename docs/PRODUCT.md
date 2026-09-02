@@ -15,7 +15,7 @@ One person: the owner, using their own X account and bookmarks. The project may 
 4. Owner browses a paginated library page (`/`) — search, favourites filter, sort by
    newest/oldest/title, and 10/20/30/50 videos per page — and opens a per-video watch page
    (`/watch/:id`) to play the video, set a title/description, toggle favourite, or delete it. Back to
-   library restores the originating query, page, and card position (ADR-0011, ADR-0015).
+   library restores the originating query, page, and card position (ADR-0011, ADR-0016).
 
 ## Constraints (from the owner, 2026-08-29)
 - Runs **entirely in the cloud**: scheduling, downloading, storage. No home server, no laptop dependency.

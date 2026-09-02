@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "#src/store";
 import { sync, type Deps } from "#src/sync";
-import { MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, STORAGE_ALERT_STEP_BYTES } from "#src/limits";
+import { DEFAULT_MAX_FILE_BYTES, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, STORAGE_ALERT_STEP_BYTES } from "#src/limits";
 import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, type Scripted } from "./fakes.ts";
 
 const fx = () => fixture("bookmarks.json");
@@ -130,6 +130,35 @@ test("video too large → failed/too_large, nothing stored; 5xx → pending/http
   assert.equal(w.f.calls.filter(([u]) => u.includes("1_high")).length, highCallsBefore, "permanently failed item not re-fetched");
   assert.equal(w.f.calls.filter(([u]) => u.includes("/2.mp4")).length, gifCallsBefore + 1, "transient failure is retried");
   assert.deepEqual([(await w.store.getBookmark("1000000000000000001"))!.status, (await w.store.getBookmark("1000000000000000001"))!.error], ["failed", "too_large"]);
+});
+
+test("sync snapshots the owner-selected max file bytes once per run", async () => {
+  const b = fx(); b.data = b.data.slice(0, 2); b.meta.result_count = 2;
+  let kv: FakeKV;
+  const w = world(routes(b, () => {
+    kv.map.set("max_file_bytes", String(MAX_FILE_BYTES));
+    return { status: 200, bodyBytes: new Uint8Array(1), headers: { "content-length": String(2 * MIN_FILE_BYTES) } };
+  }));
+  kv = w.kv;
+  await w.store.putMaxFileBytes(MIN_FILE_BYTES);
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 0);
+  assert.equal(r.failed, 2);
+  assert.equal(w.r2.objects.size, 0, "both videos use the 1 MiB snapshot even after KV changes to 3 GiB");
+  assert.deepEqual((await w.store.listByStatus(["failed"])).map((x) => x.error), ["too_large", "too_large"]);
+});
+
+test("an owner-selected limit above the default permits a larger video", async () => {
+  const b = fx(); b.data = b.data.slice(0, 1); b.meta.result_count = 1;
+  const len = DEFAULT_MAX_FILE_BYTES + 1;
+  const w = world(routes(b, () => ({ status: 200, bodyBytes: new Uint8Array(1), headers: { "content-length": String(len) } })));
+  await w.store.putMaxFileBytes(2 * DEFAULT_MAX_FILE_BYTES);
+  await authed(w.store);
+  const r = await sync(w.d);
+  assert.equal(r.downloaded, 1);
+  assert.equal(r.failed, 0);
+  assert.equal((await w.store.getBookmark("1000000000000000001"))!.status, "downloaded");
 });
 
 test("video response with no content-length → failed/no_length, nothing stored, body never read", async () => {

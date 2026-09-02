@@ -15,6 +15,7 @@ Curated, topic-grouped facts a future session could re-trip on. Not a log: JOURN
 - 2026-08-29: The `cloudflare-docs` MCP (no auth) is a valid source for hard rule 5 alongside Context7. Baked into: `CLAUDE.md` rule 5.
 
 ## Tooling (Claude Code on this repo)
+- 2026-09-02 Parallel branches can independently allocate the same next ADR number. After fetching/merging `main`, keep the already-merged ADR number and renumber the incoming branch's ADR plus every reference before committing. Source: PR #20 and PR #21 both created ADR-0015; PR #21 became ADR-0016. Baked into: not yet.
 - 2026-09-02 This Paseo worktree's Git metadata is under the primary checkout, outside the writable sandbox; index-writing commands such as `git add`/`commit` fail on `.git/worktrees/puny-dinosaur/index.lock` with `Operation not permitted`. Run them unsandboxed. Baked into: not yet.
 - 2026-09-02 Homebrew FFmpeg 8.0.1 on this Mac lacks the `drawtext` filter (`No such filter: 'drawtext'`), so walkthrough captions need pre-rendered text or a caption-free render. Baked into: not yet.
 - 2026-08-31 Any git command that writes `.claude/hooks/` (merge/checkout/pull of a commit touching it, e.g. ADR-0014's `session-protocol.sh`) fails inside the Claude Code sandbox with `cannot create directory at '.claude/hooks': Operation not permitted` — the path is on the sandbox write-deny list. Run that one git command with the sandbox disabled. Baked into: not yet (add to `docs/runbooks/agent-setup.md` next to the push/fetch note if it re-trips).

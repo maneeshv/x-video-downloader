@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES } from "#src/limits";
 import { Store } from "#src/store";
 import { FakeD1, FakeKV, FakeR2 } from "./fakes.ts";
 
@@ -21,6 +22,17 @@ test("tokens, userId, status, pause round-trip through KV", async () => {
   assert.equal(await s.getPausedUntil(), 0);
   await s.pause(123); assert.equal(await s.getPausedUntil(), 123);
   await s.clearPause(); assert.equal(await s.getPausedUntil(), 0);
+});
+
+test("max file bytes defaults safely, persists, and rejects corrupt KV state", async () => {
+  const { s, kv } = mk();
+  assert.equal(await s.getMaxFileBytes(), DEFAULT_MAX_FILE_BYTES);
+  await s.putMaxFileBytes(1536 * 1024 ** 2);
+  assert.equal(await s.getMaxFileBytes(), 1536 * 1024 ** 2);
+  for (const invalid of ["wat", "1.5", String(MIN_FILE_BYTES - 1), String(MAX_FILE_BYTES + 1)]) {
+    await kv.put("max_file_bytes", invalid);
+    assert.equal(await s.getMaxFileBytes(), DEFAULT_MAX_FILE_BYTES, invalid);
+  }
 });
 
 test("pkce verifier is single-use", async () => {

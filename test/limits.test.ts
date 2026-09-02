@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as L from "#src/limits";
 
-test("caps match ADR-0005 / spec §5", () => {
+test("caps match ADR-0005 / ADR-0015", () => {
   assert.equal(L.MAX_API_REQUESTS_PER_RUN, 3);
   assert.equal(L.MAX_DOWNLOADS_PER_RUN, 5);
-  assert.equal(L.MAX_FILE_BYTES, 1024 ** 3);
+  assert.equal(L.MIN_FILE_BYTES, 1024 ** 2);
+  assert.equal(L.DEFAULT_MAX_FILE_BYTES, 1024 ** 3);
+  assert.equal(L.MAX_FILE_BYTES, 3 * 1024 ** 3);
   assert.equal(L.STORAGE_ALERT_BYTES, 9 * 1024 ** 3);
   assert.equal(L.BACKFILL_PAGE_SIZE, 90);
   assert.equal(L.BACKFILL_MAX_ITEMS, 800);

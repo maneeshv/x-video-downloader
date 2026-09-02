@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES } from "#src/limits";
 import type { Tokens } from "#src/x";
 
 export type BookmarkStatus = "no_video" | "pending" | "downloaded" | "failed";
@@ -76,6 +77,12 @@ export class Store {
   async getPausedUntil(): Promise<number> { return Number(await this.kv.get("paused_until")) || 0; }
   pause(untilMs: number): Promise<void> { return this.kv.put("paused_until", String(untilMs)); }
   clearPause(): Promise<void> { return this.kv.delete("paused_until"); }
+
+  async getMaxFileBytes(): Promise<number> {
+    const n = Number(await this.kv.get("max_file_bytes"));
+    return Number.isSafeInteger(n) && n >= MIN_FILE_BYTES && n <= MAX_FILE_BYTES ? n : DEFAULT_MAX_FILE_BYTES;
+  }
+  putMaxFileBytes(bytes: number): Promise<void> { return this.kv.put("max_file_bytes", String(bytes)); }
 
   putPkce(state: string, verifier: string): Promise<void> { return this.kv.put(`pkce:${state}`, verifier, { expirationTtl: 600 }); }
   async takePkce(state: string): Promise<string | null> {

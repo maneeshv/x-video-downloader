@@ -1,6 +1,6 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex, renderStats, renderWatch } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
@@ -106,6 +106,15 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     if (!req.headers.get("content-type")?.startsWith("application/json")) return new Response("json only", { status: 415 });
     return json({ retried: await store.retryAll(new Date().toISOString()) });
   }
+  if (url.pathname === "/api/settings/max-file-bytes") {
+    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (!req.headers.get("content-type")?.startsWith("application/json")) return new Response("json only", { status: 415 });
+    const body = await req.json().catch(() => null) as { maxFileBytes?: unknown } | null;
+    const value = body?.maxFileBytes;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < MIN_FILE_BYTES || value > MAX_FILE_BYTES) return new Response("bad request", { status: 400 });
+    await store.putMaxFileBytes(value);
+    return new Response(null, { status: 204 });
+  }
   const api = /^\/api\/videos\/([^/]+)(\/retry)?$/.exec(url.pathname);
   if (api) {
     const id = api[1]!;
@@ -162,7 +171,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     return video(store, key, req);
   }
   if (url.pathname === "/stats") {
-    return html(renderStats(await store.stats(), await store.listByStatus(["pending", "failed"]), await store.getStatus(), await store.getPausedUntil()));
+    return html(renderStats(await store.stats(), await store.listByStatus(["pending", "failed"]), await store.getStatus(), await store.getPausedUntil(), await store.getMaxFileBytes()));
   }
   if (url.pathname === "/status") return json({ ...(await store.getStatus()), pausedUntil: await store.getPausedUntil(), userId: await store.getUserId() });
   if (url.pathname === "/oauth/start") {

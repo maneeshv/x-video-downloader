@@ -1,6 +1,6 @@
 import {
   BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS,
-  MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
+  MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
 } from "#src/limits";
 import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
 import { fetchBookmarks, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
@@ -72,19 +72,19 @@ function row(it: Item, status: BookmarkStatus, d: Deps, extra: Partial<BookmarkU
 // `bytes` on a failure = the Content-Length that was refused (too_large), so /stats can show it.
 type Dl = { ok: true; bytes: number } | { ok: false; status: BookmarkStatus; error: string; bytes?: number };
 
-async function download(d: Deps, it: Item, v: Video): Promise<Dl> {
+async function download(d: Deps, it: Item, v: Video, maxFileBytes: number): Promise<Dl> {
   const res = await d.fetch(v.url);
   if (!res.ok || !res.body) return { ok: false, status: res.status >= 500 ? "pending" : "failed", error: `http_${res.status}` };
   const len = Number(res.headers.get("content-length")) || 0;
   // R2.put needs a known length for streams; an unknown/zero length is refused outright rather
   // than buffered, so a video response can never be read fully into memory before the size check.
   if (!len) return { ok: false, status: "failed", error: "no_length" };
-  if (len > MAX_FILE_BYTES) return { ok: false, status: "failed", error: "too_large", bytes: len };
+  if (len > maxFileBytes) return { ok: false, status: "failed", error: "too_large", bytes: len };
   await d.store.putVideo(v.key, res.body, { postId: it.postId, text: it.text, postUrl: it.postUrl, postedAt: it.postedAt, previewUrl: it.previewUrl, bitRate: v.bitRate });
   return { ok: true, bytes: len };
 }
 
-async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number; max: number }): Promise<void> {
+async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number; max: number }, maxFileBytes: number): Promise<void> {
   if (!it.hasVideoMedia) return d.store.upsertBookmark(row(it, "no_video", d));
   // A row with a permanent error — outright "failed", or "downloaded" partial (one video of a
   // multi-video post permanently failed) — is not retried unless the error is transient
@@ -101,7 +101,7 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
     if (budget.downloads >= budget.max) continue;
     budget.downloads++;
     let r: Dl;
-    try { r = await download(d, it, v); } catch (e) { console.error("download failed", v.key, String(e)); r = { ok: false, status: "pending", error: "exception" }; }
+    try { r = await download(d, it, v, maxFileBytes); } catch (e) { console.error("download failed", v.key, String(e)); r = { ok: false, status: "pending", error: "exception" }; }
     if (r.ok) { bytes += r.bytes; stored++; firstStoredKey ??= v.key; res.downloaded++; res.bytes += r.bytes; }
     else { fail = r; res.failed++; }
     const [lo, hi] = DOWNLOAD_JITTER_MS;
@@ -142,6 +142,7 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
   const res: SyncResult = { pages: 0, seen: 0, downloaded: 0, failed: 0, bytes: 0 };
   if ((await d.store.getPausedUntil()) > now(d)) return { ...res, skipped: "paused" };
 
+  const maxFileBytes = await d.store.getMaxFileBytes();
   const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
   const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
   const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
@@ -159,7 +160,7 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
       res.seen += items.length;
       for (const it of items) {
         sawMedia ||= it.hasVideoMedia;
-        await processItem(d, it, res, budget);
+        await processItem(d, it, res, budget, maxFileBytes);
       }
       paginationToken = body.meta?.next_token;
       if (!paginationToken || res.seen >= BACKFILL_MAX_ITEMS) break;
