@@ -33,4 +33,4 @@ Decision: `../../decisions/0015-owner-adjustable-file-limit-bounded-in-code.md`
 - [x] Update `docs/ARCHITECTURE.md` and `docs/STANDARDS.md` for the two-layer limit.
 - [x] Prepend the session entry to `docs/JOURNAL.md` and rewrite `docs/STATUS.md`.
 - [x] Run focused tests, `npm run check`, and review the final diff.
-- [ ] Commit code and docs together, push the branch, and open the PR.
+- [x] Commit code and docs together, push the branch, and open PR #20.
