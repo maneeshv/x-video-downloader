@@ -1,5 +1,5 @@
 # Deploy the Worker
-When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-08-31
+When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-09-03
 
 `wrangler.toml` is local and gitignored (copy `wrangler.toml.example`, fill in real ids). Network
 `wrangler`/`npm` calls need the Bash sandbox off (EPERM otherwise).
@@ -40,8 +40,8 @@ Resource ids created 2026-08-30 (not secrets, safe to record):
 ```bash
 npx wrangler d1 migrations apply x-downloader --remote   # answer yes if prompted
 ```
-This applies every pending file in `migrations/` (as of 2026-09-02: `0001_bookmarks.sql`,
-`0002_library.sql`, `0003_duration.sql`). Run it **before** `wrangler deploy` whenever `migrations/` changed — the new
+This applies every pending file in `migrations/` (as of 2026-09-03: `0001_bookmarks.sql`,
+`0002_library.sql`, `0003_duration.sql`, `0003_tags.sql`). Run it **before** `wrangler deploy` whenever `migrations/` changed — the new
 code reads the new columns immediately, so deploying first would 500 on the first request that
 touches them.
 

@@ -6,16 +6,17 @@ export type BookmarkRow = {
   post_id: string; first_seen_at: string; posted_at: string | null; text: string | null; post_url: string;
   has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null; duration_ms: number | null;
   preview_url: string | null; updated_at: string;
-  // Library metadata (migration 0002, ADR-0011). Owner-set; sync never writes them.
-  title: string | null; description: string | null; favorite: 0 | 1; deleted_at: string | null;
+  // Library metadata (migrations 0002/0003_tags, ADR-0011/0020). Owner-set; sync never writes them.
+  title: string | null; description: string | null; favorite: 0 | 1; tags: string | null; deleted_at: string | null;
 };
-export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "deleted_at"> & { now: string };
+export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "tags" | "deleted_at"> & { now: string };
 export type Status = {
   lastRun?: string; lastError?: string | null; auth?: "ok" | "needs_reauth"; counts?: Record<string, number>;
   totalBytes?: number; noMediaRuns?: number; alerts?: Record<string, string>;
 };
 // One row per (status, error, deleted) group; `bytes` sums the group's stored bytes.
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
+export type TagOption = { tag: string; count: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
 export type MissingDuration = { post_id: string; r2_key: string };
 export const posterKey = (postId: string) => `posters/${postId}`;
@@ -23,11 +24,11 @@ export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
 export type LibraryQuery = {
-  q?: string; fav?: boolean; sort?: "newest" | "oldest" | "title" | "largest" | "smallest" | "longest" | "shortest";
+  q?: string; fav?: boolean; tags?: string[]; sort?: "newest" | "oldest" | "title" | "largest" | "smallest" | "longest" | "shortest";
   page?: number; perPage?: LibraryPageSize;
 };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
-export type MetaPatch = { title?: string; description?: string; favorite?: boolean };
+export type MetaPatch = { title?: string; description?: string; favorite?: boolean; tags?: string[] };
 const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   newest: "posted_at DESC, post_id DESC",
   oldest: "posted_at ASC, post_id ASC",
@@ -37,10 +38,17 @@ const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   longest: "duration_ms IS NULL ASC, duration_ms DESC, post_id DESC",
   shortest: "duration_ms IS NULL ASC, duration_ms ASC, post_id DESC",
 };
-const libraryFilter = ({ q, fav }: LibraryQuery): { where: string; args: unknown[] } => {
+const libraryFilter = ({ q, fav, tags }: LibraryQuery): { where: string; args: unknown[] } => {
   const clauses = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
   if (fav) clauses.push("favorite = 1");
-  if (q) { clauses.push("(title LIKE ? OR description LIKE ? OR text LIKE ?)"); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  for (const tag of tags ?? []) {
+    clauses.push("EXISTS (SELECT 1 FROM json_each(COALESCE(bookmarks.tags, '[]')) WHERE value = ? COLLATE NOCASE)");
+    args.push(tag);
+  }
+  if (q) {
+    clauses.push("(title LIKE ? OR description LIKE ? OR text LIKE ? OR EXISTS (SELECT 1 FROM json_each(COALESCE(tags, '[]')) WHERE value LIKE ?))");
+    args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
   return { where: clauses.join(" AND "), args };
 };
 
@@ -119,6 +127,24 @@ export class Store {
       .bind(...args, limit, offset).all<BookmarkRow>();
     return results;
   }
+  async listTags(): Promise<TagOption[]> {
+    const { results } = await this.db
+      .prepare("SELECT value AS tag, first_seen_at, post_id FROM bookmarks, json_each(COALESCE(tags, '[]')) WHERE status = 'downloaded' AND deleted_at IS NULL ORDER BY value COLLATE NOCASE, first_seen_at, post_id")
+      .all<{ tag: string; first_seen_at: string; post_id: string }>();
+    const found = new Map<string, { option: TagOption; postIds: Set<string> }>();
+    for (const row of results) {
+      const key = row.tag.toLowerCase(), existing = found.get(key);
+      if (existing) {
+        existing.postIds.add(row.post_id);
+        existing.option.count = existing.postIds.size;
+      } else found.set(key, { option: { tag: row.tag, count: 1 }, postIds: new Set([row.post_id]) });
+    }
+    return [...found.values()].map(({ option }) => option);
+  }
+  async canonicalizeTags(tags: string[]): Promise<string[]> {
+    const available = new Map((await this.listTags()).map((option) => [option.tag.toLowerCase(), option.tag]));
+    return tags.map((tag) => available.get(tag.toLowerCase()) ?? tag);
+  }
   stats(): Promise<StatRow[]> {
     return this.db
       .prepare("SELECT status, error, deleted_at IS NOT NULL AS deleted, COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS bytes FROM bookmarks GROUP BY 1, 2, 3")
@@ -169,6 +195,7 @@ export class Store {
     if (p.title !== undefined) { sets.push("title = ?"); args.push(p.title || null); }
     if (p.description !== undefined) { sets.push("description = ?"); args.push(p.description || null); }
     if (p.favorite !== undefined) { sets.push("favorite = ?"); args.push(p.favorite ? 1 : 0); }
+    if (p.tags !== undefined) { sets.push("tags = ?"); args.push(p.tags.length ? JSON.stringify(p.tags) : null); }
     sets.push("updated_at = ?"); args.push(now);
     const r = await this.db
       .prepare(`UPDATE bookmarks SET ${sets.join(", ")} WHERE post_id = ? AND status = 'downloaded' AND deleted_at IS NULL`)

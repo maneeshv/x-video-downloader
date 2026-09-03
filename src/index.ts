@@ -1,6 +1,6 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex, renderStats, renderWatch } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { backfillPosters, sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
@@ -93,15 +93,25 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
   if ("title" in o) { if (typeof o.title !== "string") return null; p.title = o.title; }
   if ("description" in o) { if (typeof o.description !== "string") return null; p.description = o.description; }
   if ("favorite" in o) { if (typeof o.favorite !== "boolean") return null; p.favorite = o.favorite; }
+  if ("tags" in o) {
+    if (!Array.isArray(o.tags) || o.tags.length > TAGS_MAX || o.tags.some((tag) => typeof tag !== "string")) return null;
+    const normalized = o.tags.map((tag) => tag.trim());
+    if (normalized.some((tag) => !tag || tag.length > TAG_MAX)) return null;
+    p.tags = normalized.filter((tag, i, all) => all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === i);
+  }
   return Object.keys(p).length ? p : null;
 }
 
 function parseLibraryQuery(url: URL): LibraryQuery {
   const sort = url.searchParams.get("sort"), rawPage = Number(url.searchParams.get("page"));
   const rawPerPage = Number(url.searchParams.get("perPage"));
+  const tags = url.searchParams.getAll("tag").map((tag) => tag.trim())
+    .filter((tag, i, all) => tag.length > 0 && tag.length <= TAG_MAX && all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === i)
+    .slice(0, TAGS_MAX);
   return {
     q: url.searchParams.get("q")?.trim() || undefined,
     fav: url.searchParams.get("fav") === "1",
+    tags: tags.length ? tags : undefined,
     sort: sort === "oldest" || sort === "title" || sort === "largest" || sort === "smallest" || sort === "longest" || sort === "shortest" ? sort : "newest",
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     perPage: LIBRARY_PAGE_SIZES.includes(rawPerPage as typeof LIBRARY_PAGE_SIZES[number])
@@ -170,6 +180,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
       const patch = parseMetaPatch(await req.json().catch(() => null));
       if (!patch) return new Response("bad request", { status: 400 });
       if ((patch.title?.length ?? 0) > TITLE_MAX || (patch.description?.length ?? 0) > DESCRIPTION_MAX) return new Response("too long", { status: 413 });
+      if (patch.tags) patch.tags = await store.canonicalizeTags(patch.tags);
       if (!(await store.updateMeta(id, patch, new Date().toISOString()))) return new Response("not found", { status: 404 });
       return new Response(null, { status: 204 });
     }
@@ -182,14 +193,14 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     const perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     q.page = Math.min(q.page ?? 1, totalPages);
-    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner));
+    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner, await store.listTags()));
   }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {
     if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
     const b = await store.getBookmark(watch[1]!);
     if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
-    return html(renderWatch(b, parseLibraryQuery(url), isOwner));
+    return html(renderWatch(b, parseLibraryQuery(url), isOwner, isOwner ? await store.listTags() : []));
   }
   if (url.pathname.startsWith("/v/")) {
     let key: string;

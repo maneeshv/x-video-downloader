@@ -82,11 +82,11 @@ test("poster storage uses the deterministic key and preserves image metadata", a
   assert.ok(await s.getPoster("12345", new Headers()));
 });
 
-test("migration 0002: library columns exist and default to unset", async () => {
+test("library metadata migrations default owner-managed fields to unset", async () => {
   const { s } = mk();
   await s.upsertBookmark(row());
   const b = (await s.getBookmark("1"))!;
-  assert.deepEqual([b.title, b.description, b.favorite, b.deleted_at], [null, null, 0, null]);
+  assert.deepEqual([b.title, b.description, b.favorite, b.tags, b.deleted_at], [null, null, 0, null, null]);
 });
 
 test("migration 0003: duration defaults to unknown and upsert preserves known duration", async () => {
@@ -121,6 +121,28 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.ok(await s.markDeleted("3", "2026-08-30T01:00:00Z"));
   assert.deepEqual(await ids(), ["2", "1"], "deleted rows are hidden");
   assert.deepEqual(await ids({ q: "cats" }), ["1"]);
+});
+
+test("tags persist, participate in search, expose canonical video counts, and support exact AND filters", async () => {
+  const { s, d1 } = mk();
+  await dl(s, "1", { text: "first", now: "2026-08-02T00:00:00Z" });
+  await dl(s, "2", { text: "second", posted_at: "2026-08-02T00:00:00Z" });
+  await dl(s, "3", { text: "third", now: "2026-08-01T00:00:00Z", posted_at: "2026-08-03T00:00:00Z" });
+  await s.updateMeta("1", { tags: ["Tutorial", "Design"] }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("2", { tags: ["Design systems"] }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("3", { tags: ["design"] }, "2026-08-30T00:00:00Z");
+  assert.equal((await s.getBookmark("1"))!.tags, '["Tutorial","Design"]');
+  d1.db.prepare("UPDATE bookmarks SET tags = ? WHERE post_id = ?").run('["Tutorial","Design","DESIGN"]', "1");
+  assert.deepEqual(await s.listTags(), [
+    { tag: "design", count: 2 }, { tag: "Design systems", count: 1 }, { tag: "Tutorial", count: 1 },
+  ], "legacy case duplicates on one video count once");
+  assert.deepEqual((await s.listLibrary({ tags: ["tutorial"] })).map((r) => r.post_id), ["1"]);
+  assert.deepEqual((await s.listLibrary({ tags: ["Design"] })).map((r) => r.post_id), ["3", "1"], "exact tag filter does not match longer tags");
+  assert.deepEqual((await s.listLibrary({ tags: ["Tutorial", "DESIGN"] })).map((r) => r.post_id), ["1"], "every selected tag must match");
+  assert.deepEqual((await s.listLibrary({ q: "systems" })).map((r) => r.post_id), ["2"]);
+  assert.equal(await s.countLibrary({ tags: ["DESIGN"] }), 2);
+  await s.updateMeta("1", { tags: [] }, "2026-08-30T01:00:00Z");
+  assert.equal((await s.getBookmark("1"))!.tags, null, "an empty tag list clears tags");
 });
 
 test("countLibrary matches filters and listLibrary returns an offset window", async () => {
