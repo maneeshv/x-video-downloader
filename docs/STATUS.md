@@ -3,6 +3,7 @@ Updated: 2026-09-03
 ## Now
 - **The forward-integrated Worker is live as version `4d969b9d-8ae9-4747-8561-6065f990c9df` at 100%:** the approved tag picker now coexists with restored Longest/Shortest duration sorting, durable private R2 posters, and exact-email owner/viewer authorization. All 87 tests pass; the custom domain returns the expected Access 302 and workers.dev remains 404.
 - **No data was lost during the stale deployment:** both additive D1 migrations were already applied, and the repair required no production data mutation.
+- **PR #32 is open:** `add-tagging-functionality-library` is published at https://github.com/maneeshv/x-video-downloader/pull/32.
 
 ## Next
 1. Authenticated production smoke test: confirm Longest/Shortest, reuse an existing tag, create/save a new tag, and preserve a two-tag filter through Watch → Back.
