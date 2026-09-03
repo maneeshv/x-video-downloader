@@ -21,6 +21,8 @@ export const VIDEO_KEY_RE = /^\d{5,25}(-\d{1,2})?\.mp4$/;
 export const POST_ID_RE = /^\d{5,25}$/;              // route :postId — same digit range as VIDEO_KEY_RE
 export const TITLE_MAX = 200;                        // library metadata caps (spec 2026-08-30 §6)
 export const DESCRIPTION_MAX = 2000;
+export const TAG_MAX = 30;
+export const TAGS_MAX = 12;
 
 // X API v2 — docs.x.com/x-api/users/get-bookmarks, docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code
 export const X_AUTHORIZE_URL = "https://x.com/i/oauth2/authorize";

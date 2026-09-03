@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-03 — Add tagging to the Library
+- Did: added migration `0003_tags.sql`; watch-page comma-separated tag editing; bounded API validation; JSON-backed Store persistence; tag-aware free-text search; an exact case-insensitive Library tag filter; card chips; URL-state preservation; and focused Store/route/render tests. Updated PRODUCT and ARCHITECTURE for the scope and schema change. Both TypeScript projects typecheck and all 73 tests pass.
+- Decided: ADR-0018 — store up to 12 tags of 30 characters as a JSON array in the existing bookmark row and query them with SQLite `json_each`; preserve tag filter state in the canonical Library URL.
+- Learned / gotcha: none.
+- Left undone: not committed, reviewed, migrated in production, or deployed.
+
 ## 2026-09-02 — Sort Library by file size (branch `fix/library-sort-by-size`)
 - Did: added Largest and Smallest to the existing Library sort control and URL allow-list. `Store.listLibrary()` orders on the existing D1 `bytes` column, with deterministic post ID tie-breaks and unknown sizes last in both directions. Extended the existing Store and route tests; `npm run check` passes all 72 tests, both TypeScript projects, and the session-doc check.
 - Decided: no migration, client-side sorting, dependency, or new abstraction; the server already owns filtering, pagination, and ordering, and D1 already stores each video's size.

@@ -139,12 +139,12 @@ test("/v/:key: a non-Range R2 fault propagates instead of becoming a 416", async
 
 test("html escapes text", async () => {
   const { renderIndex } = await import("#src/html");
-  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null }], {});
+  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null }], {});
   assert.doesNotMatch(out, /<script>x/);
   assert.match(out, /&lt;script&gt;/);
 });
 
-test("POST /api/videos/:id validates, then updates title/description/favorite", async () => {
+test("POST /api/videos/:id validates, then updates title/description/favorite/tags", async () => {
   const a = await seeded();
   assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T" }, "text/plain")).status, 415, "JSON content-type required (CSRF)");
   assert.equal((await a.send("/api/videos/12345", { method: "POST", headers: { "content-type": "application/json" }, body: "{" })).status, 400, "unparsable");
@@ -152,11 +152,14 @@ test("POST /api/videos/:id validates, then updates title/description/favorite", 
   assert.equal((await jsonPost(a, "/api/videos/12345", { favorite: "yes" })).status, 400, "wrong type");
   assert.equal((await jsonPost(a, "/api/videos/12345", { title: "x".repeat(201) })).status, 413);
   assert.equal((await jsonPost(a, "/api/videos/12345", { description: "x".repeat(2001) })).status, 413);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { tags: "tutorial" })).status, 400);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { tags: ["x".repeat(31)] })).status, 400);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { tags: Array.from({ length: 13 }, (_, i) => String(i)) })).status, 400);
   assert.equal((await jsonPost(a, "/api/videos/99999", { title: "T" })).status, 404);
   assert.equal((await jsonPost(a, "/api/videos/abc", { title: "T" })).status, 404, "non-numeric id");
-  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T", description: "D", favorite: true })).status, 204);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T", description: "D", favorite: true, tags: [" Tutorial ", "tutorial", "Design"] })).status, 204);
   const b = (await a.store.getBookmark("12345"))!;
-  assert.deepEqual([b.title, b.description, b.favorite], ["T", "D", 1]);
+  assert.deepEqual([b.title, b.description, b.favorite, b.tags], ["T", "D", 1, '["Tutorial","Design"]']);
   assert.equal((await a.send("/api/videos/12345", { method: "PUT" })).status, 405);
 });
 
@@ -174,13 +177,14 @@ test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is id
 test("/ renders the grid and honours q, fav, sort; deleted videos leave it", async () => {
   const a = await seeded();
   await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z", bytes: 10 }));
-  await a.store.updateMeta("12346", { title: "Aardvark", favorite: true }, "2026-08-30T00:00:00Z");
+  await a.store.updateMeta("12346", { title: "Aardvark", favorite: true, tags: ["Animals", "Reference"] }, "2026-08-30T00:00:00Z");
   const html = async (p: string) => { const r = await a.get(p); assert.equal(r.status, 200, p); return r.text(); };
   let h = await html("/");
   assert.match(h, /href="\/watch\/12345"/);
   assert.match(h, /Aardvark/, "title shown");
   assert.match(h, /hello world/, "text fallback shown when no title");
   assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "poster hotlinked");
+  assert.match(h, /<span class="tag">Animals<\/span>/, "tags shown on cards");
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
   h = await html("/?sort=oldest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
@@ -194,6 +198,9 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.match(h, /value="zebra"/, "search box keeps the query");
   h = await html("/?fav=1");
   assert.match(h, /\/watch\/12346\?fav=1"/); assert.doesNotMatch(h, /\/watch\/12345\?fav=1"/);
+  h = await html("/?tag=animals");
+  assert.match(h, /\/watch\/12346\?tag=animals"/); assert.doesNotMatch(h, /\/watch\/12345\?tag=animals"/);
+  assert.match(h, /<option value="Animals" selected>Animals<\/option>/);
   h = await html("/?q=nothing-matches");
   assert.match(h, /No matching videos/);
   await a.send("/api/videos/12346", { method: "DELETE" });
@@ -236,13 +243,14 @@ test("watch links carry library state and Back to library targets the originatin
 
 test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async () => {
   const a = await seeded();
-  await a.store.updateMeta("12345", { title: "My <title>", description: "desc" }, "2026-08-30T00:00:00Z");
+  await a.store.updateMeta("12345", { title: "My <title>", description: "desc", tags: ["Tutorial", "Watch later"] }, "2026-08-30T00:00:00Z");
   const r = await a.get("/watch/12345");
   assert.equal(r.status, 200);
   const h = await r.text();
   assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
+  assert.match(h, /name="tags"[^>]*value="Tutorial, Watch later"/);
   assert.match(h, /\/api\/videos\//, "mutation script present");
   await a.store.upsertBookmark(dlRow("12347", { status: "pending", r2_key: null }));
   assert.equal((await a.get("/watch/12347")).status, 404, "pending");
@@ -254,7 +262,7 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
 
 test("library, watch and stats pages link to the Access logout URL", async () => {
   const { renderIndex, renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
   assert.match(renderIndex([row], {}), /href="\/cdn-cgi\/access\/logout"/);
   assert.match(renderWatch(row), /href="\/cdn-cgi\/access\/logout"/);
   assert.match((await (await (await seeded()).get("/stats")).text()), /href="\/cdn-cgi\/access\/logout"/);
@@ -316,7 +324,7 @@ test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; 
 
 test("watch page carries a Download link to the same file the player uses", async () => {
   const { renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
   assert.match(renderWatch(row), /<a[^>]*href="\/v\/1-2\.mp4"[^>]*download="1\.mp4"/);
 });
 

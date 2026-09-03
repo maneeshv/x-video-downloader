@@ -1,6 +1,6 @@
 import { verifyAccessJwt } from "#src/access";
 import { renderIndex, renderStats, renderWatch } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { BACKFILL_MAX_DOWNLOADS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
@@ -75,15 +75,22 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
   if ("title" in o) { if (typeof o.title !== "string") return null; p.title = o.title; }
   if ("description" in o) { if (typeof o.description !== "string") return null; p.description = o.description; }
   if ("favorite" in o) { if (typeof o.favorite !== "boolean") return null; p.favorite = o.favorite; }
+  if ("tags" in o) {
+    if (!Array.isArray(o.tags) || o.tags.length > TAGS_MAX || o.tags.some((tag) => typeof tag !== "string" || !tag.length || tag.length > TAG_MAX)) return null;
+    p.tags = o.tags.map((tag) => tag.trim()).filter((tag, i, all) => tag && all.findIndex((other) => other.toLocaleLowerCase() === tag.toLocaleLowerCase()) === i);
+    if (p.tags.length > TAGS_MAX || p.tags.some((tag) => tag.length > TAG_MAX)) return null;
+  }
   return Object.keys(p).length ? p : null;
 }
 
 function parseLibraryQuery(url: URL): LibraryQuery {
   const sort = url.searchParams.get("sort"), rawPage = Number(url.searchParams.get("page"));
   const rawPerPage = Number(url.searchParams.get("perPage"));
+  const tag = url.searchParams.get("tag")?.trim();
   return {
     q: url.searchParams.get("q")?.trim() || undefined,
     fav: url.searchParams.get("fav") === "1",
+    tag: tag && tag.length <= TAG_MAX ? tag : undefined,
     sort: sort === "oldest" || sort === "title" || sort === "largest" || sort === "smallest" ? sort : "newest",
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     perPage: LIBRARY_PAGE_SIZES.includes(rawPerPage as typeof LIBRARY_PAGE_SIZES[number])
@@ -155,7 +162,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     const perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     q.page = Math.min(q.page ?? 1, totalPages);
-    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total));
+    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, await store.listTags()));
   }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {

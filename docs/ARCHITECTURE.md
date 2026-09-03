@@ -1,13 +1,13 @@
 # Architecture (as built)
 
-Updated: 2026-09-02
+Updated: 2026-09-03
 
 Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
 (ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Live since
 2026-08-30: Access (Cloudflare identity provider, account-members policy), X OAuth 2.0 client, Telegram
 alerts all configured; proven on a test account (142 videos), store wiped, then backfilled from the
 owner's real account (`docs/STATUS.md`). Deploys are manual `wrangler deploy`; CI runs typecheck + tests
-(ADR-0010). The library UI supports search/filter/sort, per-video title, description, favourite, and
+(ADR-0010). The library UI supports search/filter/sort, per-video title, description, tags, favourite, and
 delete (ADR-0011); since 2026-09-02 it also uses URL-backed pagination and restores the originating
 card after a watch-page round trip (ADR-0016).
 
@@ -37,9 +37,9 @@ Every route (including `/oauth/callback`) requires header `cf-access-jwt-asserti
 `verifyAccessJwt` (`src/access.ts`, ADR-0004) against `TEAM_DOMAIN`/`POLICY_AUD` — missing or
 invalid JWT → 403 before any other logic runs.
 All HTML pages (`/`, `/watch/:id`, `/stats`) carry a "Log out" link to `/cdn-cgi/access/logout`; Cloudflare answers that path at the edge (clears the Access cookie for this hostname and revokes the session across all Access apps — there is no per-app logout), so it never reaches the Worker and has no route here. Source: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/ (read 2026-08-30).
-- `GET /?q=&fav=1&sort=newest|oldest|title|largest|smallest&page=N&perPage=10|20|30|50` — parses a canonical `LibraryQuery` (default page/page-size = 1/10; invalid values fall back; an out-of-range page clamps to the last page), gets the matching total from `store.countLibrary()`, then calls `store.listLibrary(query, perPage, offset)` (`status='downloaded' AND deleted_at IS NULL`, `LIKE` over title/description/text, safe sort allow-list, `LIMIT`/`OFFSET`) and `renderIndex()`. Size sorts use the stored `bytes` value and place rows with an unknown size last. Search/favourite/sort/page-size changes reset to page 1; page links and cards retain active state (ADR-0016).
+- `GET /?q=&fav=1&tag=&sort=newest|oldest|title|largest|smallest&page=N&perPage=10|20|30|50` — parses a canonical `LibraryQuery` (default page/page-size = 1/10; invalid values fall back; an out-of-range page clamps to the last page), gets the matching total from `store.countLibrary()`, then calls `store.listLibrary(query, perPage, offset)` (`status='downloaded' AND deleted_at IS NULL`, `LIKE` over title/description/text/tags, exact case-insensitive tag matching via `json_each`, safe sort allow-list, `LIMIT`/`OFFSET`) and `renderIndex()`. `store.listTags()` supplies the live tag dropdown; cards render tag chips. Size sorts use the stored `bytes` value and place rows with an unknown size last. Search/tag/favourite/sort/page-size changes reset to page 1; page links and cards retain active state (ADR-0016, ADR-0018).
 - `GET /watch/:postId` — `renderWatch()` over `store.getBookmark(postId)`. Library query fields carried on the watch URL are validated through the same parser; Back to library reconstructs the originating URL with `#video-<postId>` so the card returns to view, and delete returns to the same page without the now-missing anchor (ADR-0016). The header also carries a "Download" link: `<a href="/v/<r2_key>" download="<postId>.mp4">` — same URL the player streams, saved via the native `download` attribute (same-origin, so no `Content-Disposition` header is needed; MDN, read 2026-08-31). `postId` must match `POST_ID_RE` (`src/limits.ts`); 404 unless the row is `status='downloaded'`, `deleted_at` unset, and `r2_key` set.
-- `POST /api/videos/:postId` — body JSON `{title?, description?, favorite?}`. 415 unless `content-type` starts with `application/json` (no CSRF token needed: a cross-site `<form>` cannot set this header); 400 on an unparsable body, a body naming no known field, or a wrongly-typed field; 413 when `title` exceeds `TITLE_MAX`=200 or `description` exceeds `DESCRIPTION_MAX`=2000; 404 when `store.updateMeta` matches no `downloaded`, non-deleted row; 204 on success.
+- `POST /api/videos/:postId` — body JSON `{title?, description?, favorite?, tags?}`. Tags are an array with at most 12 non-empty strings of at most 30 characters; input is trimmed and case-insensitively deduplicated. 415 unless `content-type` starts with `application/json` (no CSRF token needed: a cross-site `<form>` cannot set this header); 400 on an unparsable body, a body naming no known field, or a wrongly-typed/invalid field; 413 when `title` exceeds `TITLE_MAX`=200 or `description` exceeds `DESCRIPTION_MAX`=2000; 404 when `store.updateMeta` matches no `downloaded`, non-deleted row; 204 on success.
 - `DELETE /api/videos/:postId` — 404 unless the row is `status='downloaded'`; otherwise `store.deleteVideos(postId)` (R2 delete of `<id>.mp4` and `<id>-1..4.mp4`) then `store.markDeleted(postId, now)`, in that order (ADR-0011: no tombstone for a video still in R2), then subtracts the row's `bytes` from KV `status.totalBytes` (clamped at 0, only when `deleted_at` was null before this call), then 204. Idempotent: a repeat delete on an already-`downloaded` row (R2 delete of an already-missing key is a no-op) still 204s and does not subtract again.
 - `GET /v/:key` — streams a video from R2. `key` must match `VIDEO_KEY_RE` (`src/limits.ts`) or 404. Supports `Range` (206 + `Content-Range`, via `servedRange()` which normalizes all three `R2Range` shapes) and conditional revalidation: 304 when the request carried If-None-Match or If-Modified-Since and R2 dropped the body; 412 otherwise; 416 only when the request carried a Range header and R2 rejected it (any other `getVideo` throw propagates instead of being reported as a client-facing 416). Malformed `%`-escapes in the key 404 instead of throwing. A deleted video's key is simply gone from R2, so this 404s naturally.
 - `GET /stats` — `renderStats()` (`src/html.ts`, ADR-0013/0015/0017) over `store.stats()` (one `GROUP BY status, error, deleted_at IS NOT NULL` aggregate with `COUNT(*)` and `SUM(bytes)`), `store.listByStatus(["pending","failed"])` (≤500 rows, `updated_at DESC`), `store.getStatus()`, `store.getPausedUntil()`, and `store.getMaxFileBytes()`. Tiles (downloaded / pending / failed / no video / deleted / stored bytes — all from D1; KV `totalBytes` also tracks deletes since 2026-08-31), an integer-MB file-limit editor, health table (last run, auth, last error, pause, last-run counts, active alerts), failures by `error`, and the pending + failed post lists (failed rows also show `bytes` as a Size column — blank for rows that failed before 2026-08-31, which have `bytes = NULL` until retried) with a Retry button per row, a "Retry all failed (n)" button above the failed list, and a "Run backfill now" link to `/backfill?downloads=30`.
@@ -70,14 +70,15 @@ All HTML pages (`/`, `/watch/:id`, `/stats`) carry a "Log out" link to `/cdn-cgi
 `max_file_bytes` (owner-selected integer byte count; 1 GiB default, valid range 1 MiB–5 GiB),
 `pkce:<state>` (verifier, 600s TTL).
 
-## D1 schema (`migrations/0001_bookmarks.sql` + `0002_library.sql`, table `bookmarks`)
+## D1 schema (`migrations/0001_bookmarks.sql` + `0002_library.sql` + `0003_tags.sql`, table `bookmarks`)
 `post_id` (PK), `first_seen_at`, `posted_at`, `text`, `post_url`, `has_video`, `status`
 (`no_video`|`pending`|`downloaded`|`failed`), `error`, `r2_key`, `bytes`, `preview_url`,
 `updated_at`. Upsert is idempotent and monotonic: a row already `downloaded` never reverts its
 `status`/`error`, and `has_video` only ever goes 0→1. `0002_library.sql` (2026-08-30, ADR-0011)
 adds `title` (`TEXT`), `description` (`TEXT`), `favorite` (`INTEGER NOT NULL DEFAULT 0`),
 `deleted_at` (`TEXT`, ISO timestamp; non-`NULL` = tombstone) — sync never writes these; only the
-`/api/videos/:id` routes and `markDeleted` do.
+`/api/videos/:id` routes and `markDeleted` do. `0003_tags.sql` (2026-09-03, ADR-0018) adds
+nullable `tags` (`TEXT`) containing a JSON string array; sync never writes it.
 
 ## R2 key scheme
 Key = `VIDEO_KEY_RE` = `/^\d{5,25}(-\d{1,2})?\.mp4$/` — the numeric X media id, `-1`/`-2` suffix
@@ -96,4 +97,4 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
 --test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
 0009 (refuse unknown-length video bodies instead of buffering), 0011 (library metadata in D1;
-delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling).
+delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling), 0018 (bounded JSON-array tags in D1).

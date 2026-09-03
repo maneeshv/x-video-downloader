@@ -74,11 +74,11 @@ test("putVideo stores metadata as strings; has() reflects R2", async () => {
   assert.equal(r2.objects.get("1.mp4")!.contentType, "video/mp4");
 });
 
-test("migration 0002: library columns exist and default to unset", async () => {
+test("library metadata migrations default owner-managed fields to unset", async () => {
   const { s } = mk();
   await s.upsertBookmark(row());
   const b = (await s.getBookmark("1"))!;
-  assert.deepEqual([b.title, b.description, b.favorite, b.deleted_at], [null, null, 0, null]);
+  assert.deepEqual([b.title, b.description, b.favorite, b.tags, b.deleted_at], [null, null, 0, null, null]);
 });
 
 const dl = (s: Store, post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) =>
@@ -104,6 +104,22 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.ok(await s.markDeleted("3", "2026-08-30T01:00:00Z"));
   assert.deepEqual(await ids(), ["2", "1"], "deleted rows are hidden");
   assert.deepEqual(await ids({ q: "cats" }), ["1"]);
+});
+
+test("tags persist, participate in search, and support an exact case-insensitive filter", async () => {
+  const { s } = mk();
+  await dl(s, "1", { text: "first" });
+  await dl(s, "2", { text: "second", posted_at: "2026-08-02T00:00:00Z" });
+  await s.updateMeta("1", { tags: ["Tutorial", "Design"] }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("2", { tags: ["Design systems"] }, "2026-08-30T00:00:00Z");
+  assert.equal((await s.getBookmark("1"))!.tags, '["Tutorial","Design"]');
+  assert.deepEqual(await s.listTags(), ["Design", "Design systems", "Tutorial"]);
+  assert.deepEqual((await s.listLibrary({ tag: "tutorial" })).map((r) => r.post_id), ["1"]);
+  assert.deepEqual((await s.listLibrary({ tag: "Design" })).map((r) => r.post_id), ["1"], "exact tag filter does not match longer tags");
+  assert.deepEqual((await s.listLibrary({ q: "systems" })).map((r) => r.post_id), ["2"]);
+  assert.equal(await s.countLibrary({ tag: "DESIGN" }), 1);
+  await s.updateMeta("1", { tags: [] }, "2026-08-30T01:00:00Z");
+  assert.equal((await s.getBookmark("1"))!.tags, null, "an empty tag list clears tags");
 });
 
 test("countLibrary matches filters and listLibrary returns an offset window", async () => {
