@@ -76,9 +76,10 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
   if ("description" in o) { if (typeof o.description !== "string") return null; p.description = o.description; }
   if ("favorite" in o) { if (typeof o.favorite !== "boolean") return null; p.favorite = o.favorite; }
   if ("tags" in o) {
-    if (!Array.isArray(o.tags) || o.tags.length > TAGS_MAX || o.tags.some((tag) => typeof tag !== "string" || !tag.length || tag.length > TAG_MAX)) return null;
-    p.tags = o.tags.map((tag) => tag.trim()).filter((tag, i, all) => tag && all.findIndex((other) => other.toLocaleLowerCase() === tag.toLocaleLowerCase()) === i);
-    if (p.tags.length > TAGS_MAX || p.tags.some((tag) => tag.length > TAG_MAX)) return null;
+    if (!Array.isArray(o.tags) || o.tags.length > TAGS_MAX || o.tags.some((tag) => typeof tag !== "string")) return null;
+    const normalized = o.tags.map((tag) => tag.trim());
+    if (normalized.some((tag) => !tag || tag.length > TAG_MAX)) return null;
+    p.tags = normalized.filter((tag, i, all) => all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === i);
   }
   return Object.keys(p).length ? p : null;
 }
@@ -86,11 +87,13 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
 function parseLibraryQuery(url: URL): LibraryQuery {
   const sort = url.searchParams.get("sort"), rawPage = Number(url.searchParams.get("page"));
   const rawPerPage = Number(url.searchParams.get("perPage"));
-  const tag = url.searchParams.get("tag")?.trim();
+  const tags = url.searchParams.getAll("tag").map((tag) => tag.trim())
+    .filter((tag, i, all) => tag.length > 0 && tag.length <= TAG_MAX && all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === i)
+    .slice(0, TAGS_MAX);
   return {
     q: url.searchParams.get("q")?.trim() || undefined,
     fav: url.searchParams.get("fav") === "1",
-    tag: tag && tag.length <= TAG_MAX ? tag : undefined,
+    tags: tags.length ? tags : undefined,
     sort: sort === "oldest" || sort === "title" || sort === "largest" || sort === "smallest" ? sort : "newest",
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     perPage: LIBRARY_PAGE_SIZES.includes(rawPerPage as typeof LIBRARY_PAGE_SIZES[number])
@@ -150,6 +153,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
       const patch = parseMetaPatch(await req.json().catch(() => null));
       if (!patch) return new Response("bad request", { status: 400 });
       if ((patch.title?.length ?? 0) > TITLE_MAX || (patch.description?.length ?? 0) > DESCRIPTION_MAX) return new Response("too long", { status: 413 });
+      if (patch.tags) patch.tags = await store.canonicalizeTags(patch.tags);
       if (!(await store.updateMeta(id, patch, new Date().toISOString()))) return new Response("not found", { status: 404 });
       return new Response(null, { status: 204 });
     }
@@ -169,7 +173,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
     const b = await store.getBookmark(watch[1]!);
     if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
-    return html(renderWatch(b, parseLibraryQuery(url)));
+    return html(renderWatch(b, parseLibraryQuery(url), await store.listTags()));
   }
   if (url.pathname.startsWith("/v/")) {
     let key: string;

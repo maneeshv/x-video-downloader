@@ -16,12 +16,13 @@ export type Status = {
 };
 // One row per (status, error, deleted) group; `bytes` sums the group's stored bytes.
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
+export type TagOption = { tag: string; count: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
 export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
 export type LibraryQuery = {
-  q?: string; fav?: boolean; tag?: string; sort?: "newest" | "oldest" | "title" | "largest" | "smallest";
+  q?: string; fav?: boolean; tags?: string[]; sort?: "newest" | "oldest" | "title" | "largest" | "smallest";
   page?: number; perPage?: LibraryPageSize;
 };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
@@ -33,10 +34,13 @@ const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   largest: "bytes IS NULL ASC, bytes DESC, post_id DESC",
   smallest: "bytes IS NULL ASC, bytes ASC, post_id DESC",
 };
-const libraryFilter = ({ q, fav, tag }: LibraryQuery): { where: string; args: unknown[] } => {
+const libraryFilter = ({ q, fav, tags }: LibraryQuery): { where: string; args: unknown[] } => {
   const clauses = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
   if (fav) clauses.push("favorite = 1");
-  if (tag) { clauses.push("EXISTS (SELECT 1 FROM json_each(COALESCE(tags, '[]')) WHERE value = ? COLLATE NOCASE)"); args.push(tag); }
+  for (const tag of tags ?? []) {
+    clauses.push("EXISTS (SELECT 1 FROM json_each(COALESCE(bookmarks.tags, '[]')) WHERE value = ? COLLATE NOCASE)");
+    args.push(tag);
+  }
   if (q) {
     clauses.push("(title LIKE ? OR description LIKE ? OR text LIKE ? OR EXISTS (SELECT 1 FROM json_each(COALESCE(tags, '[]')) WHERE value LIKE ?))");
     args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
@@ -118,11 +122,23 @@ export class Store {
       .bind(...args, limit, offset).all<BookmarkRow>();
     return results;
   }
-  async listTags(): Promise<string[]> {
+  async listTags(): Promise<TagOption[]> {
     const { results } = await this.db
-      .prepare("SELECT DISTINCT value COLLATE NOCASE AS tag FROM bookmarks, json_each(COALESCE(tags, '[]')) WHERE status = 'downloaded' AND deleted_at IS NULL ORDER BY tag COLLATE NOCASE")
-      .all<{ tag: string }>();
-    return results.map((r) => r.tag);
+      .prepare("SELECT value AS tag, first_seen_at, post_id FROM bookmarks, json_each(COALESCE(tags, '[]')) WHERE status = 'downloaded' AND deleted_at IS NULL ORDER BY value COLLATE NOCASE, first_seen_at, post_id")
+      .all<{ tag: string; first_seen_at: string; post_id: string }>();
+    const found = new Map<string, { option: TagOption; postIds: Set<string> }>();
+    for (const row of results) {
+      const key = row.tag.toLowerCase(), existing = found.get(key);
+      if (existing) {
+        existing.postIds.add(row.post_id);
+        existing.option.count = existing.postIds.size;
+      } else found.set(key, { option: { tag: row.tag, count: 1 }, postIds: new Set([row.post_id]) });
+    }
+    return [...found.values()].map(({ option }) => option);
+  }
+  async canonicalizeTags(tags: string[]): Promise<string[]> {
+    const available = new Map((await this.listTags()).map((option) => [option.tag.toLowerCase(), option.tag]));
+    return tags.map((tag) => available.get(tag.toLowerCase()) ?? tag);
   }
   stats(): Promise<StatRow[]> {
     return this.db

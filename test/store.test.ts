@@ -106,18 +106,24 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.deepEqual(await ids({ q: "cats" }), ["1"]);
 });
 
-test("tags persist, participate in search, and support an exact case-insensitive filter", async () => {
-  const { s } = mk();
-  await dl(s, "1", { text: "first" });
+test("tags persist, participate in search, expose canonical video counts, and support exact AND filters", async () => {
+  const { s, d1 } = mk();
+  await dl(s, "1", { text: "first", now: "2026-08-02T00:00:00Z" });
   await dl(s, "2", { text: "second", posted_at: "2026-08-02T00:00:00Z" });
+  await dl(s, "3", { text: "third", now: "2026-08-01T00:00:00Z", posted_at: "2026-08-03T00:00:00Z" });
   await s.updateMeta("1", { tags: ["Tutorial", "Design"] }, "2026-08-30T00:00:00Z");
   await s.updateMeta("2", { tags: ["Design systems"] }, "2026-08-30T00:00:00Z");
+  await s.updateMeta("3", { tags: ["design"] }, "2026-08-30T00:00:00Z");
   assert.equal((await s.getBookmark("1"))!.tags, '["Tutorial","Design"]');
-  assert.deepEqual(await s.listTags(), ["Design", "Design systems", "Tutorial"]);
-  assert.deepEqual((await s.listLibrary({ tag: "tutorial" })).map((r) => r.post_id), ["1"]);
-  assert.deepEqual((await s.listLibrary({ tag: "Design" })).map((r) => r.post_id), ["1"], "exact tag filter does not match longer tags");
+  d1.db.prepare("UPDATE bookmarks SET tags = ? WHERE post_id = ?").run('["Tutorial","Design","DESIGN"]', "1");
+  assert.deepEqual(await s.listTags(), [
+    { tag: "design", count: 2 }, { tag: "Design systems", count: 1 }, { tag: "Tutorial", count: 1 },
+  ], "legacy case duplicates on one video count once");
+  assert.deepEqual((await s.listLibrary({ tags: ["tutorial"] })).map((r) => r.post_id), ["1"]);
+  assert.deepEqual((await s.listLibrary({ tags: ["Design"] })).map((r) => r.post_id), ["3", "1"], "exact tag filter does not match longer tags");
+  assert.deepEqual((await s.listLibrary({ tags: ["Tutorial", "DESIGN"] })).map((r) => r.post_id), ["1"], "every selected tag must match");
   assert.deepEqual((await s.listLibrary({ q: "systems" })).map((r) => r.post_id), ["2"]);
-  assert.equal(await s.countLibrary({ tag: "DESIGN" }), 1);
+  assert.equal(await s.countLibrary({ tags: ["DESIGN"] }), 2);
   await s.updateMeta("1", { tags: [] }, "2026-08-30T01:00:00Z");
   assert.equal((await s.getBookmark("1"))!.tags, null, "an empty tag list clears tags");
 });

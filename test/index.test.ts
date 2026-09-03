@@ -146,6 +146,8 @@ test("html escapes text", async () => {
 
 test("POST /api/videos/:id validates, then updates title/description/favorite/tags", async () => {
   const a = await seeded();
+  await a.store.upsertBookmark(dlRow("12346", { now: "2026-08-01T00:00:00Z" }));
+  await a.store.updateMeta("12346", { tags: ["Design"] }, "2026-08-30T00:00:00Z");
   assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T" }, "text/plain")).status, 415, "JSON content-type required (CSRF)");
   assert.equal((await a.send("/api/videos/12345", { method: "POST", headers: { "content-type": "application/json" }, body: "{" })).status, 400, "unparsable");
   assert.equal((await jsonPost(a, "/api/videos/12345", {})).status, 400, "no fields");
@@ -153,11 +155,12 @@ test("POST /api/videos/:id validates, then updates title/description/favorite/ta
   assert.equal((await jsonPost(a, "/api/videos/12345", { title: "x".repeat(201) })).status, 413);
   assert.equal((await jsonPost(a, "/api/videos/12345", { description: "x".repeat(2001) })).status, 413);
   assert.equal((await jsonPost(a, "/api/videos/12345", { tags: "tutorial" })).status, 400);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { tags: ["   "] })).status, 400);
   assert.equal((await jsonPost(a, "/api/videos/12345", { tags: ["x".repeat(31)] })).status, 400);
   assert.equal((await jsonPost(a, "/api/videos/12345", { tags: Array.from({ length: 13 }, (_, i) => String(i)) })).status, 400);
   assert.equal((await jsonPost(a, "/api/videos/99999", { title: "T" })).status, 404);
   assert.equal((await jsonPost(a, "/api/videos/abc", { title: "T" })).status, 404, "non-numeric id");
-  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T", description: "D", favorite: true, tags: [" Tutorial ", "tutorial", "Design"] })).status, 204);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { title: "T", description: "D", favorite: true, tags: [" Tutorial ", "tutorial", "design"] })).status, 204);
   const b = (await a.store.getBookmark("12345"))!;
   assert.deepEqual([b.title, b.description, b.favorite, b.tags], ["T", "D", 1, '["Tutorial","Design"]']);
   assert.equal((await a.send("/api/videos/12345", { method: "PUT" })).status, 405);
@@ -198,9 +201,15 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.match(h, /value="zebra"/, "search box keeps the query");
   h = await html("/?fav=1");
   assert.match(h, /\/watch\/12346\?fav=1"/); assert.doesNotMatch(h, /\/watch\/12345\?fav=1"/);
-  h = await html("/?tag=animals");
-  assert.match(h, /\/watch\/12346\?tag=animals"/); assert.doesNotMatch(h, /\/watch\/12345\?tag=animals"/);
-  assert.match(h, /<option value="Animals" selected>Animals<\/option>/);
+  h = await html("/?tag=animals&tag=reference");
+  assert.match(h, /\/watch\/12346\?tag=animals&amp;tag=reference"/); assert.doesNotMatch(h, /\/watch\/12345\?tag=animals/);
+  assert.match(h, /id="tag-trigger"/);
+  assert.match(h, /Tags <span[^>]*>2<\/span>/);
+  assert.match(h, /Filter by tags/);
+  assert.match(h, /data-tag="Animals"[^>]*disabled/);
+  assert.match(h, /data-tag-count="1"/);
+  h = await html("/?tag=Animals&tag=animals&tag=" + "x".repeat(31));
+  assert.match(h, /Tags <span[^>]*>1<\/span>/, "duplicate and invalid query tags are discarded");
   h = await html("/?q=nothing-matches");
   assert.match(h, /No matching videos/);
   await a.send("/api/videos/12346", { method: "DELETE" });
@@ -230,14 +239,15 @@ test("/ paginates by 10, clamps pages, and allows up to 50 videos", async () => 
   assert.equal((h.match(/class="video-card"/g) ?? []).length, 10, "invalid page size falls back to 10");
 });
 
-test("watch links carry library state and Back to library targets the originating card", async () => {
+test("watch links carry repeated tag state and Back to library targets the originating card", async () => {
   const a = await seeded();
   for (let id = 12346; id <= 12368; id++) await a.store.upsertBookmark(dlRow(String(id)));
-  const library = await (await a.get("/?q=hello&sort=oldest&page=2&perPage=20")).text();
+  for (let id = 12345; id <= 12368; id++) await a.store.updateMeta(String(id), { tags: ["Tutorial", "Design"] }, "2026-08-30T00:00:00Z");
+  const library = await (await a.get("/?q=hello&tag=Tutorial&tag=Design&sort=oldest&page=2&perPage=20")).text();
   assert.equal((library.match(/class="video-card"/g) ?? []).length, 4);
-  assert.match(library, /href="\/watch\/12365\?q=hello&amp;sort=oldest&amp;page=2&amp;perPage=20"/);
-  const watch = await (await a.get("/watch/12365?q=hello&fav=1&sort=oldest&page=2&perPage=20")).text();
-  assert.match(watch, /href="\/\?q=hello&amp;fav=1&amp;sort=oldest&amp;page=2&amp;perPage=20#video-12365"[^>]*>Back to library<\/a>/);
+  assert.match(library, /href="\/watch\/12365\?q=hello&amp;tag=Tutorial&amp;tag=Design&amp;sort=oldest&amp;page=2&amp;perPage=20"/);
+  const watch = await (await a.get("/watch/12365?q=hello&fav=1&tag=Tutorial&tag=Design&sort=oldest&page=2&perPage=20")).text();
+  assert.match(watch, /href="\/\?q=hello&amp;fav=1&amp;tag=Tutorial&amp;tag=Design&amp;sort=oldest&amp;page=2&amp;perPage=20#video-12365"[^>]*>Back to library<\/a>/);
   assert.match(watch, /location\.href=backToLibrary/, "delete keeps the originating library state");
 });
 
@@ -250,7 +260,10 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
-  assert.match(h, /name="tags"[^>]*value="Tutorial, Watch later"/);
+  assert.match(h, /id="video-tag-input"/);
+  assert.match(h, /Choose an existing tag or type a new one and press Enter/);
+  assert.match(h, /data-initial-tags="\[&quot;Tutorial&quot;,&quot;Watch later&quot;\]"/);
+  assert.match(h, /role="listbox"/);
   assert.match(h, /\/api\/videos\//, "mutation script present");
   await a.store.upsertBookmark(dlRow("12347", { status: "pending", r2_key: null }));
   assert.equal((await a.get("/watch/12347")).status, 404, "pending");

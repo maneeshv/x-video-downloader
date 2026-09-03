@@ -1,6 +1,6 @@
 # Product: x-downloader
 
-Updated: 2026-09-03 (owner-managed Library tags deployed)
+Updated: 2026-09-03 (discoverable tag picker implemented; deployment pending)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.
@@ -12,9 +12,9 @@ One person: the owner, using their own X account and bookmarks. The project may 
 1. Owner bookmarks a video post in X (any client).
 2. A scheduled job in the cloud notices the new bookmark.
 3. The video file is downloaded to the owner's cloud storage, and the job remembers it so it is never downloaded twice.
-4. Owner browses a paginated library page (`/`) — search, tag and favourites filters, sort by
+4. Owner browses a paginated library page (`/`) — search, discoverable multi-tag AND filtering and favourites filters, sort by
    newest/oldest/title/largest/smallest, and 10/20/30/50 videos per page — and opens a per-video watch page
-   (`/watch/:id`) to play the video, set a title/description/tags, toggle favourite, or delete it. Back to
+   (`/watch/:id`) to play the video, set a title/description, choose existing shared tags or create one by pressing Enter, toggle favourite, or delete it. Back to
    library restores the originating query, page, and card position (ADR-0011, ADR-0016).
 
 ## Constraints (from the owner, 2026-08-29)
