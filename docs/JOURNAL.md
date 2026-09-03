@@ -1,11 +1,11 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
-## 2026-09-03 — Add tagging to the Library
-- Did: added migration `0003_tags.sql`; watch-page comma-separated tag editing; bounded API validation; JSON-backed Store persistence; tag-aware free-text search; an exact case-insensitive Library tag filter; card chips; URL-state preservation; and focused Store/route/render tests. Updated PRODUCT and ARCHITECTURE for the scope and schema change. Both TypeScript projects typecheck and all 73 tests pass.
+## 2026-09-03 — Add and deploy tagging to the Library
+- Did: added migration `0003_tags.sql`; watch-page comma-separated tag editing; bounded API validation; JSON-backed Store persistence; tag-aware free-text search; an exact case-insensitive Library tag filter; card chips; URL-state preservation; and focused Store/route/render tests. Updated PRODUCT and ARCHITECTURE for the scope and schema change. Both TypeScript projects typecheck and all 73 tests pass. Committed as `f0749f7`, applied and verified the remote D1 migration, then deployed Worker version `75a92145-80e4-474d-9992-827bb916f954` at 2026-09-03T04:18:24Z. Wrangler reports 100% traffic on that version; `xrender.uk/status` returns the expected Access 302 and the workers.dev route returns 404.
 - Decided: ADR-0018 — store up to 12 tags of 30 characters as a JSON array in the existing bookmark row and query them with SQLite `json_each`; preserve tag filter state in the canonical Library URL.
-- Learned / gotcha: none.
-- Left undone: not committed, reviewed, migrated in production, or deployed.
+- Learned / gotcha: Wrangler 4.127.1 does not accept `d1 migrations apply --yes`; the runbook's plain command is correct, and non-interactive execution uses Wrangler's confirmation fallback. The migration was not attempted by the rejected `--yes` command. This is already encoded by the runbook, so no GOTCHAS entry is needed.
+- Left undone: authenticated UI smoke testing of tag add/remove and filtered watch → Back; the unauthenticated route/access checks passed.
 
 ## 2026-09-02 — Sort Library by file size (branch `fix/library-sort-by-size`)
 - Did: added Largest and Smallest to the existing Library sort control and URL allow-list. `Store.listLibrary()` orders on the existing D1 `bytes` column, with deterministic post ID tie-breaks and unknown sizes last in both directions. Extended the existing Store and route tests; `npm run check` passes all 72 tests, both TypeScript projects, and the session-doc check.
