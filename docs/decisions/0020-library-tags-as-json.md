@@ -1,4 +1,4 @@
-# 0018. Store bounded Library tags as JSON in D1
+# 0020. Store bounded Library tags as JSON in D1
 Date: 2026-09-03 | Status: DECIDED | Supersedes: — | Evidence: https://developers.cloudflare.com/d1/sql-api/query-json/
 
 ## Context

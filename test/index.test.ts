@@ -8,7 +8,7 @@ import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, makeSigner, type Scripted }
 const TEAM = "https://team.cloudflareaccess.com", AUD = "aud1", ORIGIN = "https://w.example";
 const fixtureJson = fixture("bookmarks.json");
 
-async function app() {
+async function app(ownerEmail = "o@example.com") {
   const kv = new FakeKV(), r2 = new FakeR2(), d1 = new FakeD1();
   // access.ts's JWKS cache is keyed by team domain + kid; distinct kids per app() instance
   // avoid a stale-key collision when this file's tests share the module-level cache.
@@ -22,22 +22,25 @@ async function app() {
       return { status: 200, body: { ...fixtureJson, data: fixtureJson.data.filter((t: { id: string }) => ids.has(t.id)) } };
     }
     if (url.includes("/bookmarks")) return { status: 200, body: fixtureJson };
+    if (url.includes("pbs.twimg.com")) return { status: 200, bodyBytes: new Uint8Array([0xff, 0xd8]), headers: { "content-type": "image/jpeg", "content-length": "2" } };
     return { status: 200, bodyBytes: new Uint8Array([1, 2, 3]), headers: { "content-type": "video/mp4", "content-length": "3" } };
   });
-  const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
-  const jwt = await signer.sign({ aud: [AUD], iss: TEAM, exp: Date.now() / 1000 + 60, email: "o@example.com" });
+  const env: AppEnv = { X_CLIENT_ID: "c", X_CLIENT_SECRET: "s", TEAM_DOMAIN: TEAM, POLICY_AUD: AUD, PUBLIC_ORIGIN: ORIGIN, OWNER_EMAIL: ownerEmail, VIDEOS: r2.asR2(), KV: kv.asKV(), DB: d1.asD1() };
+  const jwtFor = (email?: string) => signer.sign({ aud: [AUD], iss: TEAM, exp: Date.now() / 1000 + 60, ...(email === undefined ? {} : { email }) });
+  const jwt = await jwtFor("o@example.com"), viewerJwt = await jwtFor("v@example.com");
   // Regression: Workers/undici throw "Illegal invocation" when fetch is called as a method of another
   // object (`deps.fetch(url)`), so every internal caller must invoke it unbound.
   const strict = function (this: unknown, ...args: Parameters<typeof f>) { assert.equal(this, undefined, "fetch called with a bound this"); return f(...args); };
-  const get = (path: string, headers: Record<string, string> = {}) => handle(new Request(ORIGIN + path, { headers: { "cf-access-jwt-assertion": jwt, ...headers } }), env, strict as typeof f);
-  const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
-    handle(new Request(ORIGIN + path, { ...init, headers: { "cf-access-jwt-assertion": jwt, ...(init.headers ?? {}) } }), env, strict as typeof f);
-  return { env, f, get, send, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
+  const as = (token: string, path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
+    handle(new Request(ORIGIN + path, { ...init, headers: { "cf-access-jwt-assertion": token, ...(init.headers ?? {}) } }), env, strict as typeof f);
+  const get = (path: string, headers: Record<string, string> = {}) => as(jwt, path, { headers });
+  const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) => as(jwt, path, init);
+  return { env, f, get, send, as, jwt, viewerJwt, jwtFor, store: new Store(kv.asKV(), d1.asD1(), r2.asR2()), kv, r2 };
 }
 
 const dlRow = (post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
   post_id, posted_at: "2026-08-01T00:00:00Z", text: "hello world", post_url: `https://x.com/i/status/${post_id}`, has_video: 1 as const,
-  status: "downloaded" as const, error: null, r2_key: `${post_id}.mp4`, bytes: 5, preview_url: "https://pbs.twimg.com/p.jpg", now: "2026-08-02T00:00:00Z", ...over,
+  status: "downloaded" as const, error: null, r2_key: `${post_id}.mp4`, bytes: 5, duration_ms: 5000, preview_url: "https://pbs.twimg.com/p.jpg", now: "2026-08-02T00:00:00Z", ...over,
 });
 // One downloaded two-video post in D1 + R2.
 async function seeded() {
@@ -45,6 +48,7 @@ async function seeded() {
   await a.store.upsertBookmark(dlRow("12345"));
   await a.r2.put("12345.mp4", new Uint8Array([1, 2, 3, 4, 5]), { httpMetadata: { contentType: "video/mp4" } });
   await a.r2.put("12345-1.mp4", new Uint8Array([1]), {});
+  await a.r2.put("posters/12345", new Uint8Array([0xff, 0xd8]), { httpMetadata: { contentType: "image/jpeg" } });
   return a;
 }
 const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknown, contentType = "application/json") =>
@@ -52,10 +56,61 @@ const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknow
 
 test("every route is 403 without a valid Access JWT", async () => {
   const { env, f } = await app();
-  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats"]) {
+  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/p/12345", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats"]) {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
   assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
+});
+
+test("viewer can only browse, watch, stream, and load posters; owner-only and future routes are 403", async () => {
+  const a = await seeded();
+  for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/p/12345"]) {
+    assert.equal((await a.as(a.viewerJwt, path)).status, 200, path);
+  }
+  const ranged = await a.as(a.viewerJwt, "/v/12345.mp4", { headers: { range: "bytes=1-2" } });
+  assert.equal(ranged.status, 206);
+  for (const path of [
+    "/stats", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/future",
+    "/api/videos/retry-all", "/api/settings/max-file-bytes", "/api/videos/12345", "/api/videos/12345/retry",
+  ]) assert.equal((await a.as(a.viewerJwt, path)).status, 403, path);
+  assert.equal((await a.as(a.viewerJwt, "/", { method: "POST" })).status, 403, "POST viewer route");
+  assert.equal((await a.as(a.viewerJwt, "/api/videos/12345", { method: "DELETE" })).status, 403, "DELETE");
+});
+
+test("owner identity is trimmed and case-insensitive; missing identity/configuration fails closed", async () => {
+  const a = await app(" O@EXAMPLE.COM ");
+  assert.equal((await a.get("/status")).status, 200, "normalized owner email");
+
+  const blankOwner = await app("   ");
+  assert.equal((await blankOwner.get("/status")).status, 403, "blank owner grants no owner access");
+  assert.equal((await blankOwner.get("/")).status, 200, "blank owner does not block valid viewers");
+
+  for (const email of [undefined, "   "]) {
+    const token = await a.jwtFor(email);
+    for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/stats", "/status", "/oauth/start", "/oauth/callback", "/backfill", "/api/videos/12345"]) {
+      assert.equal((await a.as(token, path)).status, 403, `${String(email)} ${path}`);
+    }
+  }
+
+  const missingOwner = { ...a.env } as Partial<AppEnv>;
+  delete missingOwner.OWNER_EMAIL;
+  assert.equal((await handle(new Request(`${ORIGIN}/status`, { headers: { "cf-access-jwt-assertion": a.jwt } }), missingOwner as AppEnv, a.f)).status, 403);
+});
+
+test("viewer HTML is visibly read-only and contains no owner controls or scripts", async () => {
+  const a = await seeded();
+  await a.store.updateMeta("12345", { title: "Shared", description: "Viewer <description>", favorite: true }, "2026-09-02T00:00:00Z");
+  await a.store.patchStatus({ auth: "needs_reauth" });
+  const library = await (await a.as(a.viewerJwt, "/")).text();
+  assert.match(library, /View only/);
+  assert.doesNotMatch(library, /href="\/stats"|href="\/oauth\/start"/);
+
+  const watch = await (await a.as(a.viewerJwt, "/watch/12345")).text();
+  assert.match(watch, /View only/);
+  assert.match(watch, /Viewer &lt;description&gt;/);
+  assert.doesNotMatch(watch, /Viewer <description>/);
+  assert.doesNotMatch(watch, /id="meta"|id="fav"|id="del"|\/api\/videos\/|<script>/);
+  assert.match(watch, /download/);
 });
 
 test("oauth start → callback stores tokens + user id, then backfill and index work", async () => {
@@ -85,6 +140,52 @@ test("oauth start → callback stores tokens + user id, then backfill and index 
   assert.doesNotMatch(html, /photo only/, "non-video bookmarks are not listed in v1");
   const st = await a.get("/status");
   assert.equal(((await st.json()) as { auth: string }).auth, "ok");
+});
+
+test("duration backfill batches missing downloaded rows without downloading videos", async () => {
+  const a = await app(), id = "1000000000000000004";
+  await a.store.putTokens({ access: "A", refresh: "R", expiresAt: Date.now() + 3600_000 });
+  await a.store.putUserId("u1");
+  await a.store.upsertBookmark(dlRow(id, { duration_ms: null, r2_key: `${id}-2.mp4`, error: "http_404" }));
+  for (let i = 0n; i < 100n; i++) {
+    const missing = String(2_000_000_000_000_000_000n + i);
+    await a.store.upsertBookmark(dlRow(missing, { duration_ms: null }));
+  }
+  await a.store.upsertBookmark(dlRow("3000000000000000001"));
+  await a.store.upsertBookmark(dlRow("3000000000000000002", { status: "pending", duration_ms: null }));
+  await a.store.upsertBookmark(dlRow("3000000000000000003", { duration_ms: null }));
+  await a.store.markDeleted("3000000000000000003", "2026-09-02T00:00:00Z");
+  const before = (await a.store.getBookmark(id))!;
+
+  const res = await a.get("/backfill?durations=1");
+
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json() as { durationBackfill: unknown }).durationBackfill, { checked: 101, updated: 1, unavailable: 100 });
+  const after = (await a.store.getBookmark(id))!;
+  assert.equal(after.duration_ms, 90000, "duration matches the stored second video");
+  assert.equal((await a.store.getBookmark("2000000000000000000"))?.duration_ms, null, "an omitted post stays unknown");
+  assert.deepEqual([after.status, after.error, after.r2_key, after.bytes, after.updated_at], [before.status, before.error, before.r2_key, before.bytes, before.updated_at]);
+  const lookups = a.f.calls.filter(([url]) => url.includes("/tweets?"));
+  assert.deepEqual(lookups.map(([url]) => new URL(url).searchParams.get("ids")!.split(",").length), [100, 1]);
+  assert.equal(a.f.calls.some(([url]) => url.includes("/bookmarks") || url.includes("video.twimg.com")), false);
+  assert.equal(a.r2.objects.size, 0);
+});
+
+test("poster-only /backfill validates mode and carries the keyset cursor", async () => {
+  const a = await app();
+  for (let id = 12345; id <= 12376; id++) {
+    await a.store.upsertBookmark(dlRow(String(id)));
+    await a.r2.put(`${id}.mp4`, new Uint8Array([1]));
+  }
+  assert.equal((await a.get("/backfill?posters=1&downloads=1")).status, 400);
+  assert.equal((await a.get("/backfill?posters=1&after=bad")).status, 400);
+  assert.equal((await a.get("/backfill?posters=1.5")).status, 400);
+  const first = await (await a.get("/backfill?posters=0")).json() as { postersStored: number; nextAfter: string | null };
+  assert.deepEqual(first, { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: "12345" });
+  const second = await (await a.get(`/backfill?posters=31&after=${first.nextAfter}`)).json();
+  assert.deepEqual(second, { postersStored: 30, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: "12375" });
+  const third = await (await a.get("/backfill?posters=30&after=12375")).json();
+  assert.deepEqual(third, { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: null });
 });
 
 test("/v/:key streams from R2 with Range support and rejects bad keys", async () => {
@@ -137,11 +238,36 @@ test("/v/:key: a non-Range R2 fault propagates instead of becoming a 416", async
   await assert.rejects(a.get("/v/99999.mp4"));
 });
 
+test("/p/:postId serves private R2 posters, validators, and a stable missing placeholder", async () => {
+  const a = await app();
+  await a.r2.put("posters/12345", new Uint8Array([0xff, 0xd8]), { httpMetadata: { contentType: "image/jpeg" } });
+  const image = await a.get("/p/12345");
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get("content-type"), "image/jpeg");
+  assert.equal(image.headers.get("content-length"), "2");
+  assert.equal(image.headers.get("cache-control"), "private, max-age=31536000, immutable");
+  assert.equal(image.headers.get("x-content-type-options"), "nosniff");
+  assert.equal((await a.get("/p/12345", { "if-none-match": '"posters/12345"' })).status, 304);
+  assert.equal((await a.get("/p/12345", { "if-modified-since": "Sat, 01 Aug 2026 00:00:00 GMT" })).status, 304);
+  const missing = await a.get("/p/12346");
+  assert.equal(missing.status, 200);
+  assert.equal(missing.headers.get("content-type"), "image/svg+xml");
+  assert.equal(missing.headers.get("cache-control"), "no-store");
+  assert.equal((await a.get("/p/bad")).status, 404);
+  await assert.rejects(a.get("/p/99999"), /boom/);
+});
+
 test("html escapes text", async () => {
   const { renderIndex } = await import("#src/html");
-  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null }], {});
+  const out = renderIndex([{ post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "<script>x</script>", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null }], {});
   assert.doesNotMatch(out, /<script>x/);
   assert.match(out, /&lt;script&gt;/);
+});
+
+test("library cards show video duration alongside file size", async () => {
+  const { renderIndex } = await import("#src/html");
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 5 * 1024 ** 2, duration_ms: 65000, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
+  assert.match(renderIndex([row], {}), /5\.0 MB<\/span><span class="separator">·<\/span><span>1:05<\/span>/);
 });
 
 test("POST /api/videos/:id validates, then updates title/description/favorite/tags", async () => {
@@ -179,14 +305,15 @@ test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is id
 
 test("/ renders the grid and honours q, fav, sort; deleted videos leave it", async () => {
   const a = await seeded();
-  await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z", bytes: 10 }));
+  await a.store.upsertBookmark(dlRow("12346", { text: "zebra crossing", posted_at: "2026-08-05T00:00:00Z", bytes: 10, duration_ms: 10000 }));
   await a.store.updateMeta("12346", { title: "Aardvark", favorite: true, tags: ["Animals", "Reference"] }, "2026-08-30T00:00:00Z");
   const html = async (p: string) => { const r = await a.get(p); assert.equal(r.status, 200, p); return r.text(); };
   let h = await html("/");
   assert.match(h, /href="\/watch\/12345"/);
   assert.match(h, /Aardvark/, "title shown");
   assert.match(h, /hello world/, "text fallback shown when no title");
-  assert.match(h, /src="https:\/\/pbs\.twimg\.com\/p\.jpg"/, "poster hotlinked");
+  assert.match(h, /src="\/p\/12345"/, "poster is same-origin");
+  assert.doesNotMatch(h, /pbs\.twimg\.com/, "X poster URL is never rendered");
   assert.match(h, /<span class="tag">Animals<\/span>/, "tags shown on cards");
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"), "newest first");
   h = await html("/?sort=oldest");
@@ -195,6 +322,11 @@ test("/ renders the grid and honours q, fav, sort; deleted videos leave it", asy
   assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"));
   assert.match(h, /<option value="largest" selected>Largest<\/option>/);
   h = await html("/?sort=smallest");
+  assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
+  h = await html("/?sort=longest");
+  assert.ok(h.indexOf("/watch/12346") < h.indexOf("/watch/12345"));
+  assert.match(h, /<option value="longest" selected>Longest<\/option>/);
+  h = await html("/?sort=shortest");
   assert.ok(h.indexOf("/watch/12345") < h.indexOf("/watch/12346"));
   h = await html("/?q=zebra");
   assert.match(h, /\/watch\/12346\?q=zebra"/); assert.doesNotMatch(h, /\/watch\/12345\?q=zebra"/);
@@ -258,6 +390,8 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.equal(r.status, 200);
   const h = await r.text();
   assert.match(h, /<video[^>]*src="\/v\/12345\.mp4"/);
+  assert.match(h, /poster="\/p\/12345"/);
+  assert.doesNotMatch(h, /pbs\.twimg\.com/);
   assert.match(h, /value="My &lt;title&gt;"/, "escaped");
   assert.match(h, />desc<\/textarea>/);
   assert.match(h, /id="video-tag-input"/);
@@ -265,6 +399,7 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
   assert.match(h, /data-initial-tags="\[&quot;Tutorial&quot;,&quot;Watch later&quot;\]"/);
   assert.match(h, /role="listbox"/);
   assert.match(h, /\/api\/videos\//, "mutation script present");
+  assert.doesNotMatch(h, /View only/, "owner is not labelled read-only");
   await a.store.upsertBookmark(dlRow("12347", { status: "pending", r2_key: null }));
   assert.equal((await a.get("/watch/12347")).status, 404, "pending");
   assert.equal((await a.get("/watch/99999")).status, 404, "unknown");
@@ -275,7 +410,7 @@ test("/watch/:id shows player + form; 404 for pending, deleted, unknown", async 
 
 test("library, watch and stats pages link to the Access logout URL", async () => {
   const { renderIndex, renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
   assert.match(renderIndex([row], {}), /href="\/cdn-cgi\/access\/logout"/);
   assert.match(renderWatch(row), /href="\/cdn-cgi\/access\/logout"/);
   assert.match((await (await (await seeded()).get("/stats")).text()), /href="\/cdn-cgi\/access\/logout"/);
@@ -337,7 +472,7 @@ test("POST /api/videos/:id/retry resets a failed row to pending; 404 otherwise; 
 
 test("watch page carries a Download link to the same file the player uses", async () => {
   const { renderWatch } = await import("#src/html");
-  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
+  const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1-2.mp4", bytes: 1024, duration_ms: null, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
   assert.match(renderWatch(row), /<a[^>]*href="\/v\/1-2\.mp4"[^>]*download="1\.mp4"/);
 });
 

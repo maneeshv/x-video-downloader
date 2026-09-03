@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "#src/store";
-import { sync, type Deps } from "#src/sync";
-import { DEFAULT_MAX_FILE_BYTES, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, STORAGE_ALERT_STEP_BYTES } from "#src/limits";
+import { backfillPosters, ensurePoster, sync, type Deps } from "#src/sync";
+import { DEFAULT_MAX_FILE_BYTES, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MAX_POSTER_BYTES, MIN_FILE_BYTES, STORAGE_ALERT_STEP_BYTES } from "#src/limits";
 import { FakeD1, FakeKV, FakeR2, fakeFetch, fixture, type Scripted } from "./fakes.ts";
 
 const fx = () => fixture("bookmarks.json");
 const NOW = 1_700_000_000_000;
 const mp4 = (n = 3): Scripted => ({ status: 200, bodyBytes: new Uint8Array(n), headers: { "content-type": "video/mp4", "content-length": String(n) } });
+const jpeg = (): Scripted => ({ status: 200, bodyBytes: new Uint8Array([0xff, 0xd8]), headers: { "content-type": "image/jpeg", "content-length": "2" } });
 
 function world(routes: (url: string, init: RequestInit) => Scripted, over: Partial<Deps> = {}) {
   const kv = new FakeKV(), r2 = new FakeR2(), d1 = new FakeD1();
@@ -32,6 +33,7 @@ const routes = (bookmarks: unknown, video: (url: string) => Scripted = () => mp4
   if (url.includes("/bookmarks")) return { status: 200, body: bookmarks };
   if (url.includes("api.telegram.org")) return { status: 200, body: { ok: true } };
   if (url.includes("oauth2/token")) return { status: 200, body: { access_token: "A2", refresh_token: "R2", expires_in: 7200 } };
+  if (url.includes("pbs.twimg.com")) return jpeg();
   return video(url);
 };
 
@@ -39,7 +41,10 @@ test("happy path: records every bookmark, downloads every video, reconciles on r
   const w = world(routes(fx())); await authed(w.store);
   const r = await sync(w.d);
   assert.deepEqual(r, { pages: 1, seen: 6, downloaded: 4, failed: 1, bytes: 12 });
-  assert.deepEqual([...w.r2.objects.keys()].sort(), ["1000000000000000001.mp4", "1000000000000000002.mp4", "1000000000000000004-1.mp4", "1000000000000000004-2.mp4"]);
+  assert.deepEqual([...w.r2.objects.keys()].sort(), [
+    "1000000000000000001.mp4", "1000000000000000002.mp4", "1000000000000000004-1.mp4", "1000000000000000004-2.mp4",
+    "posters/1000000000000000001", "posters/1000000000000000002", "posters/1000000000000000004",
+  ]);
   const st = async (id: string) => (await w.store.getBookmark(id))!;
   assert.equal((await st("1000000000000000001")).status, "downloaded");
   assert.equal((await st("1000000000000000001")).r2_key, "1000000000000000001.mp4");
@@ -52,6 +57,67 @@ test("happy path: records every bookmark, downloads every video, reconciles on r
   const r2 = await sync(w.d);
   assert.equal(r2.downloaded, 0); assert.equal(r2.seen, 6);
   assert.equal(w.f.calls.filter(([u]) => u.includes("video.twimg")).length, 4, "no re-download");
+  assert.equal(w.f.calls.filter(([u]) => u.includes("pbs.twimg.com")).length, 3, "existing posters are not refetched");
+});
+
+test("poster capture rejects unsafe or invalid responses without touching R2", async () => {
+  const cases: [string, string, Scripted][] = [
+    ["invalid host", "https://example.com/p.jpg", jpeg()],
+    ["non-HTTPS", "http://pbs.twimg.com/p.jpg", jpeg()],
+    ["credentials", "https://user:pass@pbs.twimg.com/p.jpg", jpeg()],
+    ["custom port", "https://pbs.twimg.com:444/p.jpg", jpeg()],
+    ["redirect", "https://pbs.twimg.com/redirect", { status: 302, headers: { location: "https://example.com/p.jpg" } }],
+    ["missing length", "https://pbs.twimg.com/no-length", { status: 200, bodyBytes: new Uint8Array([1]), headers: { "content-type": "image/jpeg" } }],
+    ["oversized", "https://pbs.twimg.com/huge", { ...jpeg(), headers: { "content-type": "image/jpeg", "content-length": String(MAX_POSTER_BYTES + 1) } }],
+    ["wrong type", "https://pbs.twimg.com/not-image", mp4()],
+  ];
+  for (const [name, url, response] of cases) {
+    const w = world(() => response);
+    assert.equal(await ensurePoster(w.d, "12345", url), "failed", name);
+    assert.equal(w.r2.objects.size, 0, name);
+  }
+});
+
+test("poster backfill advances its D1 cursor past failures and is idempotent", async () => {
+  const w = world((url) => url.endsWith("/a.jpg") ? { status: 404 } : jpeg());
+  for (const [post_id, image] of [["11111", "a"], ["22222", "b"], ["33333", "c"]]) {
+    await w.store.upsertBookmark({
+      post_id, posted_at: null, text: null, post_url: `https://x.com/i/status/${post_id}`, has_video: 1,
+      status: "downloaded", error: null, r2_key: `${post_id}.mp4`, bytes: 1, duration_ms: null,
+      preview_url: `https://pbs.twimg.com/${image}.jpg`, now: "2026-09-02T00:00:00Z",
+    });
+    await w.r2.put(`${post_id}.mp4`, new Uint8Array([1]));
+  }
+  const first = await backfillPosters(w.d, 2, null);
+  assert.deepEqual(first, { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 1, nextAfter: "22222" });
+  assert.deepEqual(await backfillPosters(w.d, 2, first.nextAfter), { postersStored: 1, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: null });
+  assert.deepEqual(await backfillPosters(w.d, 2, "22222"), { postersStored: 0, postersExisting: 1, postersUnavailable: 0, posterFailures: 0, nextAfter: null });
+  assert.deepEqual(await backfillPosters(w.d, 3, null), { postersStored: 0, postersExisting: 2, postersUnavailable: 0, posterFailures: 1, nextAfter: null });
+});
+
+test("poster fetch failure leaves the downloaded video available", async () => {
+  const b = fx(); b.data = b.data.slice(0, 1); b.meta.result_count = 1;
+  const w = world((url) => {
+    if (url.includes("/bookmarks")) return { status: 200, body: b };
+    if (url.includes("pbs.twimg.com")) throw new Error("poster unavailable");
+    return mp4();
+  });
+  await authed(w.store);
+  assert.equal((await sync(w.d)).downloaded, 1);
+  assert.equal((await w.store.getBookmark("1000000000000000001"))?.status, "downloaded");
+  assert.ok(w.r2.objects.has("1000000000000000001.mp4"));
+  assert.equal(w.r2.objects.has("posters/1000000000000000001"), false);
+});
+
+test("ordinary multi-page backfill caps poster capture attempts at 30", async () => {
+  const b = fx();
+  b.data = Array.from({ length: 31 }, (_, i) => ({ id: `30000000000000000${String(i).padStart(2, "0")}`, text: "v", attachments: { media_keys: [`13_${i}`] } }));
+  b.includes.media = b.data.map((t: { id: string }, i: number) => ({ media_key: `13_${i}`, type: "video", preview_image_url: `https://pbs.twimg.com/${i}.jpg`, variants: [{ bit_rate: 1, content_type: "video/mp4", url: `https://video.twimg.com/${t.id}.mp4` }] }));
+  delete b.meta.next_token; b.meta.result_count = 31;
+  const w = world(routes(b)); await authed(w.store);
+  for (const t of b.data) await w.r2.put(`${t.id}.mp4`, new Uint8Array([1]));
+  await sync(w.d, { backfill: true });
+  assert.equal(w.f.calls.filter(([u]) => u.includes("pbs.twimg.com")).length, 30);
 });
 
 test("download cap leaves the rest pending; next run picks them up", async () => {
@@ -85,7 +151,7 @@ test("pending D1 rows are hydrated directly even when absent from bookmarks", as
   for (const [i, post_id] of pendingIds.entries()) {
     await w.store.upsertBookmark({
       post_id, posted_at: null, text: null, post_url: `https://x.com/i/status/${post_id}`, has_video: 1,
-      status: "pending", error: null, r2_key: `${post_id}.mp4`, bytes: null, preview_url: null,
+      status: "pending", error: null, r2_key: `${post_id}.mp4`, bytes: null, duration_ms: null, preview_url: null,
       now: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
     });
   }
@@ -219,14 +285,16 @@ test("multi-video post with one permanently failed video: the stored sibling is 
   assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
   const row = await w.store.getBookmark("1000000000000000004");
   assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-1.mp4"]);
-  assert.deepEqual([...w.r2.objects.keys()], ["1000000000000000004-1.mp4"]);
+  assert.deepEqual([...w.r2.objects.keys()], ["1000000000000000004-1.mp4", "posters/1000000000000000004"]);
   assert.ok((await w.store.listLibrary()).some((x) => x.post_id === "1000000000000000004"), "listLibrary includes the partial row");
 
   const videoCalls = () => w.f.calls.filter(([u]) => u.includes("4a.mp4") || u.includes("4b.mp4")).length;
+  await w.r2.delete("posters/1000000000000000004");
   const before = videoCalls();
   const r2 = await sync(w.d);
   assert.equal(r2.downloaded, 0); assert.equal(r2.failed, 0);
   assert.equal(videoCalls(), before, "neither video is refetched on rerun");
+  assert.ok(w.r2.objects.has("posters/1000000000000000004"), "the permanent-error fast path repairs its poster");
 });
 
 test("multi-video post where the FIRST video permanently fails: r2_key points at the stored (second) key", async () => {
@@ -237,6 +305,7 @@ test("multi-video post where the FIRST video permanently fails: r2_key points at
   assert.equal(r.downloaded, 1); assert.equal(r.failed, 1);
   const row = await w.store.getBookmark("1000000000000000004");
   assert.deepEqual([row!.status, row!.error, row!.r2_key], ["downloaded", "http_404", "1000000000000000004-2.mp4"]);
+  assert.equal(row!.duration_ms, 90000, "duration belongs to the stored second video");
   assert.ok(w.r2.objects.has("1000000000000000004-2.mp4"), "the stored key is actually in R2");
   assert.equal(w.r2.objects.has("1000000000000000004-1.mp4"), false);
 });
@@ -329,9 +398,11 @@ test("a deleted post is never re-downloaded even though its key is gone from R2 
   await w.store.markDeleted(id, "2026-08-30T00:00:00Z");
   const before_updated = (await w.store.getBookmark(id))!.updated_at;
   const before = w.f.calls.filter(([u]) => u.includes("video.twimg")).length;
+  const posterBefore = w.f.calls.filter(([u]) => u.includes("pbs.twimg.com")).length;
   const r = await sync(w.d);
   assert.equal(r.downloaded, 0);
   assert.equal(w.f.calls.filter(([u]) => u.includes("video.twimg")).length, before, "no download attempted");
+  assert.equal(w.f.calls.filter(([u]) => u.includes("pbs.twimg.com")).length, posterBefore, "no poster capture attempted");
   assert.equal(w.r2.objects.has(`${id}.mp4`), false);
   const b = (await w.store.getBookmark(id))!;
   assert.equal(b.deleted_at, "2026-08-30T00:00:00Z");

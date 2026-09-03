@@ -4,6 +4,11 @@ import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, type BookmarkRow, type L
 const esc = (s: string | null) => (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const js = (s: string) => JSON.stringify(s).replace(/</g, "\\u003c");
 const mb = (b: number | null) => (b ? `${(b / 1024 / 1024).toFixed(1)} MB` : "Size unavailable");
+const duration = (ms: number | null) => {
+  if (ms === null) return "Duration unavailable";
+  const seconds = Math.floor(ms / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60);
+  return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}` : `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+};
 const bytes = (b: number) => (b < 1024 ? `${b} B` : b < 1024 ** 3 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${(b / 1024 ** 3).toFixed(2)} GB`);
 // Only https URLs are ever emitted into src/href (spec §7); anything else renders empty.
 const url = (u: string | null) => (u && u.startsWith("https://") ? esc(u) : "");
@@ -35,7 +40,7 @@ const watchHref = (postId: string, q: LibraryQuery) => {
 
 const CSS = `:root{color-scheme:dark;--bg:#090b0e;--surface:#11151a;--surface-2:#171c22;--line:#272d35;--line-strong:#3a424c;--text:#f4f1ea;--muted:#9299a3;--accent:#e7a83b;--accent-soft:#2b2316;--danger:#ff766d;--radius:14px;--shadow:0 18px 60px rgba(0,0,0,.28)}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
-.skip{position:fixed;left:1rem;top:-4rem;z-index:20;background:var(--text);color:var(--bg);padding:.65rem 1rem;border-radius:8px}.skip:focus{top:1rem}.app-bar{position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(9,11,14,.86);backdrop-filter:blur(18px)}.app-bar-inner{width:min(1480px,100%);min-height:68px;margin:auto;padding:0 clamp(1rem,3vw,2.5rem);display:flex;align-items:center;gap:1rem}.brand{font-size:1rem;font-weight:760;letter-spacing:-.02em;white-space:nowrap}.brand span{color:var(--accent)}.header-context{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.header-actions{margin-left:auto;display:flex;align-items:center;gap:.4rem}.nav-link,.button,.filter-toggle,.page-link{min-height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:10px;padding:.55rem .82rem;font-weight:650;line-height:1;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}.nav-link{color:var(--muted)}.nav-link:hover{color:var(--text);background:var(--surface-2)}
+.skip{position:fixed;left:1rem;top:-4rem;z-index:20;background:var(--text);color:var(--bg);padding:.65rem 1rem;border-radius:8px}.skip:focus{top:1rem}.app-bar{position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(9,11,14,.86);backdrop-filter:blur(18px)}.app-bar-inner{width:min(1480px,100%);min-height:68px;margin:auto;padding:0 clamp(1rem,3vw,2.5rem);display:flex;align-items:center;gap:1rem}.brand{font-size:1rem;font-weight:760;letter-spacing:-.02em;white-space:nowrap}.brand span{color:var(--accent)}.header-context{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.header-actions{margin-left:auto;display:flex;align-items:center;gap:.4rem}.view-only{border:1px solid #6e5428;border-radius:999px;background:var(--accent-soft);color:#f3c878;padding:.3rem .55rem;font-size:.68rem;font-weight:760;letter-spacing:.04em;white-space:nowrap}.nav-link,.button,.filter-toggle,.page-link{min-height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:10px;padding:.55rem .82rem;font-weight:650;line-height:1;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}.nav-link{color:var(--muted)}.nav-link:hover{color:var(--text);background:var(--surface-2)}
 main{animation:page-in .34s ease}@keyframes page-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}.library-shell,.stats-shell{width:min(1480px,100%);margin:auto;padding:clamp(1.6rem,4vw,3.5rem) clamp(1rem,3vw,2.5rem) 3rem}.library-intro{display:flex;align-items:end;justify-content:space-between;gap:2rem;margin-bottom:1.5rem}.eyebrow{margin:0 0 .35rem;color:var(--accent);font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.library-intro h1,.watch-heading h1,.stats-heading h1{margin:0;font-size:clamp(2rem,5vw,3.9rem);line-height:.96;letter-spacing:-.055em;font-weight:760}.library-summary{margin:.65rem 0 0;color:var(--muted);max-width:48rem}.result-total{font-variant-numeric:tabular-nums;color:var(--text)}
 .library-controls{display:grid;grid-template-columns:minmax(240px,1fr) auto auto auto auto;gap:.65rem;align-items:end;padding:1rem 0 1.15rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:1.5rem}.field{display:grid;gap:.35rem}.field-label{color:var(--muted);font-size:.72rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}.control,input,select,textarea{width:100%;min-height:42px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);padding:.62rem .75rem;outline:none;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}input::placeholder,textarea::placeholder{color:#6f7782}input:hover,select:hover,textarea:hover{border-color:var(--line-strong)}input:focus-visible,select:focus-visible,textarea:focus-visible,.button:focus-visible,.nav-link:focus-visible,.filter-toggle:focus-visible,.page-link:focus-visible,.video-card:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(231,168,59,.18)}.search-field{position:relative}.search-field input{padding-right:5.5rem}.search-button{position:absolute;right:.3rem;bottom:.3rem;min-height:34px;border:0;border-radius:8px;background:var(--text);color:var(--bg);padding:.35rem .75rem;font-weight:760;cursor:pointer}.filter-toggle{min-height:42px;border-color:var(--line);background:var(--surface);color:var(--muted)}.filter-toggle:hover{border-color:var(--line-strong);color:var(--text)}.filter-toggle.on{border-color:#6e5428;background:var(--accent-soft);color:#f3c878}
 .tag-filter{position:relative}.tag-trigger{gap:.45rem;white-space:nowrap}.tag-count{display:inline-grid;place-items:center;min-width:1.35rem;height:1.35rem;border-radius:999px;background:var(--line);font-size:.7rem}.tag-trigger.on .tag-count{background:var(--accent);color:#171109}.tag-popover{position:absolute;z-index:30;top:calc(100% + .5rem);right:0;width:min(390px,calc(100vw - 2rem));padding:1rem;border:1px solid var(--line-strong);border-radius:13px;background:#15191e;box-shadow:0 24px 70px rgba(0,0,0,.55)}.tag-popover h2{margin:0 0 .8rem;font-size:1.05rem}.tag-search{margin-bottom:.85rem}.picker-section-label{display:flex;justify-content:space-between;align-items:center;margin:0 0 .45rem;color:var(--muted);font-size:.72rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase}.picker-chips{display:flex;gap:.4rem;flex-wrap:wrap;min-height:0;margin-bottom:.85rem}.picker-chips:empty{display:none}.picker-chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid #6e5428;border-radius:999px;background:var(--accent-soft);color:#f3c878;padding:.3rem .38rem .3rem .62rem;font-size:.77rem}.picker-chip button{min-height:1.1rem;padding:0 .24rem;border:0;border-radius:4px;background:transparent;color:inherit;font-size:.66rem;cursor:pointer}.picker-chip button:hover{background:rgba(255,255,255,.1)}.new-tag{padding:.12rem .28rem;border-radius:4px;background:var(--accent);color:#171109;font-size:.58rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.tag-options{max-height:270px;overflow:auto;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.tag-option,.create-tag{width:100%;min-height:42px;display:flex;align-items:center;gap:.6rem;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);padding:.55rem .2rem;text-align:left;cursor:pointer}.tag-option:last-child,.create-tag:last-child{border-bottom:0}.tag-option:hover:not(:disabled),.tag-option.active,.create-tag:hover,.create-tag.active{background:var(--surface-2)}.tag-option:disabled{cursor:default;color:var(--muted)}.tag-option-name{overflow:hidden;text-overflow:ellipsis}.tag-option-count{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}.tag-option-state{color:#f3c878;font-size:.72rem}.tag-popover-hint{margin:.75rem 0;color:var(--muted);font-size:.76rem}.tag-popover-actions{display:flex;justify-content:flex-end;gap:.5rem}.tag-empty{padding:1rem .25rem;color:var(--muted);font-size:.82rem}.clear-tags-link{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
@@ -53,10 +58,10 @@ main{animation:page-in .34s ease}@keyframes page-in{from{opacity:0;transform:tra
 const page = (t: string, body: string) =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090b0e"><title>${esc(t)} · x-downloader</title><style>${CSS}</style></head><body><a class="skip" href="#content">Skip to content</a>${body}</body></html>`;
 
-const appHeader = (context: string, actions: string) => `<header class="app-bar"><div class="app-bar-inner">
+const appHeader = (context: string, actions: string, isOwner = true) => `<header class="app-bar"><div class="app-bar-inner">
   <a class="brand" href="/">x<span>-</span>downloader</a>
   <span class="header-context">${context}</span>
-  <nav class="header-actions" aria-label="Account and application">${actions}<a class="nav-link" href="/cdn-cgi/access/logout">Log out</a></nav>
+  <nav class="header-actions" aria-label="Account and application">${isOwner ? "" : '<span class="view-only">View only</span>'}${actions}<a class="nav-link" href="/cdn-cgi/access/logout">Log out</a></nav>
 </div></header>`;
 
 const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
@@ -70,17 +75,17 @@ const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
   return values;
 };
 
-export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length, availableTags: TagOption[] = []): string {
+export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length, isOwner = true, availableTags: TagOption[] = []): string {
   const pageNumber = q.page ?? 1, perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
   const selectedTags = q.tags ?? [], selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const link = (over: Partial<LibraryQuery>) => libraryHref({ ...q, ...over });
   // ponytail: multi-video posts show the first video only; the others are in R2 as <id>-n.mp4 (rclone gets them).
   const cards = rows.map((r) => `<a class="video-card" id="video-${esc(r.post_id)}" href="${esc(watchHref(r.post_id, q))}" aria-label="Play ${esc(title(r))}">
-  <div class="poster">${r.preview_url ? `<img loading="lazy" src="${url(r.preview_url)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
-  <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span></div>${tags(r).length ? `<div class="tag-list">${tags(r).map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}</div>
+  <div class="poster">${r.preview_url ? `<img loading="lazy" src="/p/${esc(r.post_id)}" alt="${esc(title(r))}">` : ""}${r.favorite ? '<span class="favorite-badge">Favourite</span>' : ""}</div>
+  <div class="card-meta"><h2 class="video-title">${esc(title(r))}</h2><div class="video-details"><time datetime="${esc(day(r))}">${esc(day(r))}</time><span class="separator">·</span><span>${mb(r.bytes)}</span><span class="separator">·</span><span>${duration(r.duration_ms)}</span></div>${tags(r).length ? `<div class="tag-list">${tags(r).map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}</div>
 </a>`).join("\n");
-  const sorts = (["newest", "oldest", "title", "largest", "smallest"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
+  const sorts = (["newest", "oldest", "title", "largest", "smallest", "longest", "shortest"] as const).map((s) => `<option value="${s}"${(q.sort ?? "newest") === s ? " selected" : ""}>${s[0]!.toUpperCase()}${s.slice(1)}</option>`).join("");
   const sizes = LIBRARY_PAGE_SIZES.map((n) => `<option value="${n}"${perPage === n ? " selected" : ""}>${n}</option>`).join("");
   const tagRows = availableTags.map(({ tag, count }) => {
     const selected = selectedKeys.has(tag.toLowerCase());
@@ -95,10 +100,10 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
     ${pageNumber < totalPages ? `<a class="page-link" href="${esc(link({ page: pageNumber + 1 }))}" aria-label="Next page">Next</a>` : '<span class="page-link disabled" aria-hidden="true">Next</span>'}
   </nav>` : "";
   const headerContext = `Last synced ${esc(status.lastRun ?? "never")}`;
-  const headerActions = `<a class="nav-link desktop-only" href="/stats">Stats</a>${status.auth === "needs_reauth" ? '<a class="nav-link" href="/oauth/start">Re-authorize</a>' : ""}`;
+  const headerActions = isOwner ? `<a class="nav-link desktop-only" href="/stats">Stats</a>${status.auth === "needs_reauth" ? '<a class="nav-link" href="/oauth/start">Re-authorize</a>' : ""}` : "";
   const tagSummary = selectedTags.length ? ` tagged ${selectedTags.map(esc).join(" + ")}` : "";
   const clearTagHref = link({ tags: undefined, page: 1 });
-  return page("Library", `${appHeader(headerContext, headerActions)}
+  return page("Library", `${appHeader(headerContext, headerActions, isOwner)}
 <main id="content" class="library-shell">
   <section class="library-intro" aria-labelledby="library-title"><div><p class="eyebrow">Your collection</p><h1 id="library-title">Video library</h1><p class="library-summary"><span class="result-total">${total} ${total === 1 ? "video" : "videos"}</span>${q.q ? ` matching “${esc(q.q)}”` : " ready to watch"}${tagSummary}${q.fav ? ", favourites only" : ""}.</p></div></section>
   <form class="library-controls" method="get" action="/">
@@ -139,7 +144,7 @@ trigger.onclick=()=>popover.hidden?open():close();search.oninput=render;search.o
 </script>`);
 }
 
-export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, availableTags: TagOption[] = []): string {
+export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true, availableTags: TagOption[] = []): string {
   const backToLibrary = libraryHref(q, `#video-${r.post_id}`), deleteReturn = libraryHref(q);
   const initialTags = tags(r), initialKeys = new Set(initialTags.map((tag) => tag.toLowerCase()));
   const initialChips = initialTags.map((tag) => `<span class="picker-chip"><span>${esc(tag)}</span><button type="button" aria-label="Remove ${esc(tag)}">Remove</button></span>`).join("");
@@ -147,13 +152,7 @@ export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, availableTags:
     const selected = initialKeys.has(tag.toLowerCase());
     return `<button class="tag-option" type="button" role="option" data-tag="${esc(tag)}" data-tag-count="${count}" aria-selected="${selected}"${selected ? " disabled" : ""}><span class="tag-option-name">${esc(tag)}</span><span class="tag-option-count">${count}</span>${selected ? '<span class="tag-option-state">Added</span>' : ""}</button>`;
   }).join("");
-  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`)}
-<main id="content" class="watch-shell">
-  <div class="watch-layout">
-    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="${url(r.preview_url)}"` : ""}></video></div>
-    <section class="watch-panel" aria-labelledby="watch-title">
-      <header class="watch-heading"><p class="eyebrow">Library video</p><h1 id="watch-title">${esc(title(r))}</h1><p class="watch-byline">Saved ${esc(day(r))} · ${mb(r.bytes)}</p></header>
-      <form id="meta" class="meta-form">
+  const ownerControls = isOwner ? `<form id="meta" class="meta-form">
         <label class="field"><span class="field-label">Title</span><input name="title" maxlength="200" placeholder="Add a title" value="${esc(r.title)}"></label>
         <label class="field"><span class="field-label">Description</span><textarea name="description" maxlength="2000" placeholder="Add a description">${esc(r.description)}</textarea></label>
         <div class="field video-tag-picker" id="video-tag-picker" data-initial-tags="${esc(JSON.stringify(initialTags))}"><label class="field-label" for="video-tag-input">Tags</label>
@@ -163,13 +162,8 @@ export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, availableTags:
         </div>
         <div class="form-actions"><button class="button primary" type="submit">Save details</button><button type="button" id="fav" class="button${r.favorite ? " on" : ""}">${r.favorite ? "Favourited" : "Add to favourites"}</button><button type="button" id="del" class="button danger">Delete video</button></div>
         <span id="msg" class="save-message" role="status" aria-live="polite"></span>
-      </form>
-      <p class="source-copy">${esc(r.text)}</p>
-      <p class="source-links"><a href="${url(r.post_url)}">Original post</a><span>·</span><a href="/v/${esc(r.r2_key)}" download>Download file</a><span>·</span><span>${mb(r.bytes)}</span></p>
-    </section>
-  </div>
-</main>
-<script>
+      </form>` : r.description ? `<p class="source-copy">${esc(r.description)}</p>` : "";
+  const ownerScript = isOwner ? `<script>
 const api="/api/videos/${esc(r.post_id)}",msg=document.getElementById("msg"),backToLibrary=${js(deleteReturn)},availableTags=JSON.parse(${js(JSON.stringify(availableTags))});let fav=${r.favorite ? "true" : "false"},stagedTags=JSON.parse(${js(JSON.stringify(initialTags))}),newTagKeys=new Set(),tagActive=-1;
 const tagRoot=document.getElementById("video-tag-picker"),tagInput=document.getElementById("video-tag-input"),tagChips=document.getElementById("video-tag-chips"),tagOptions=document.getElementById("video-tag-options"),tagHelp=document.getElementById("video-tag-help"),tagKey=t=>t.toLowerCase(),hasTag=t=>stagedTags.some(x=>tagKey(x)===tagKey(t));
 function makeChip(t){const c=document.createElement("span"),label=document.createElement("span"),remove=document.createElement("button");c.className="picker-chip";c.dataset.tagKey=tagKey(t);label.textContent=t;if(newTagKeys.has(tagKey(t))){const marker=document.createElement("span");marker.className="new-tag";marker.textContent="New";c.append(label,marker)}else c.append(label);remove.type="button";remove.textContent="Remove";remove.setAttribute("aria-label","Remove "+t);remove.onclick=()=>{stagedTags=stagedTags.filter(x=>tagKey(x)!==tagKey(t));newTagKeys.delete(tagKey(t));renderVideoTags()};c.append(remove);return c}
@@ -185,7 +179,20 @@ async function send(method,body){const res=await fetch(api,{method,headers:body?
 document.getElementById("meta").onsubmit=async e=>{e.preventDefault();const f=e.target;if(await send("POST",{title:f.title.value,description:f.description.value,tags:stagedTags})){newTagKeys.clear();renderVideoTags();msg.textContent="Saved";setTimeout(()=>msg.textContent="",1800)}};
 document.getElementById("fav").onclick=async()=>{if(await send("POST",{favorite:!fav})){fav=!fav;const b=document.getElementById("fav");b.classList.toggle("on",fav);b.textContent=fav?"Favourited":"Add to favourites"}};
 document.getElementById("del").onclick=async()=>{if(confirm("Delete this video from storage? This cannot be undone.")&&await send("DELETE"))location.href=backToLibrary};
-</script>`);
+</script>` : "";
+  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
+<main id="content" class="watch-shell">
+  <div class="watch-layout">
+    <div class="player-wrap"><video controls autoplay playsinline src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="/p/${esc(r.post_id)}"` : ""}></video></div>
+    <section class="watch-panel" aria-labelledby="watch-title">
+      <header class="watch-heading"><p class="eyebrow">Library video</p><h1 id="watch-title">${esc(title(r))}</h1><p class="watch-byline">Saved ${esc(day(r))} · ${mb(r.bytes)}</p></header>
+      ${ownerControls}
+      <p class="source-copy">${esc(r.text)}</p>
+      <p class="source-links"><a href="${url(r.post_url)}">Original post</a><span>·</span><a href="/v/${esc(r.r2_key)}" download>Download file</a><span>·</span><span>${mb(r.bytes)}</span></p>
+    </section>
+  </div>
+</main>
+${ownerScript}`);
 }
 
 // Stat tiles + tables, no charts: there is no time series to plot, only current counts.

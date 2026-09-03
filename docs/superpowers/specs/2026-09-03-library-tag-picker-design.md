@@ -30,7 +30,7 @@ Tags must behave as a shared, visible vocabulary across the Library and video ed
 - Renaming, merging, recoloring, ordering, or deleting tags globally.
 - Bulk-tagging multiple videos.
 - Tag groups, nested tags, aliases, or automatic tag suggestions.
-- Changing the existing D1 JSON-array storage decision in ADR-0018.
+- Changing the existing D1 JSON-array storage decision in ADR-0020.
 - Making the tags shown on video cards interactive; card chips remain informational and the whole card remains the play target.
 
 ## 4. Shared vocabulary and rules
@@ -133,7 +133,7 @@ Blank input never creates a tag. On blur, uncommitted input text is discarded; o
 
 ## 8. Data and server changes
 
-No migration is required. Continue using `bookmarks.tags` as a nullable JSON array under ADR-0018.
+No migration is required. Continue using `bookmarks.tags` as a nullable JSON array under ADR-0020.
 
 - Change `LibraryQuery.tag?: string` to `LibraryQuery.tags?: string[]`.
 - Parse repeated `tag` query parameters and serialize one parameter per committed selection.

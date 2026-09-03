@@ -1,13 +1,20 @@
 import {
-  BACKFILL_MAX_ITEMS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS,
-  MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES,
+  BACKFILL_MAX_ITEMS, BACKFILL_MAX_POSTERS, BACKFILL_MAX_REQUESTS, BACKFILL_PAGE_SIZE, DOWNLOAD_JITTER_MS, MAX_POSTER_BYTES, POST_ID_RE,
+  MAX_DOWNLOADS_PER_RUN, PAGE_SIZE, PAUSE_MS_AUTH, REFRESH_AHEAD_MS, STALE_PARSER_RUNS, STORAGE_ALERT_BYTES, STORAGE_ALERT_STEP_BYTES, TWEET_LOOKUP_BATCH_SIZE,
 } from "#src/limits";
-import type { BookmarkStatus, BookmarkUpsert, Store } from "#src/store";
+import { posterKey, type BookmarkStatus, type BookmarkUpsert, type Store } from "#src/store";
 import { fetchBookmarks, fetchTweetsByIds, parseBookmarks, refreshTokens, XApiError, type Fetch, type Item, type OAuthCfg, type Video } from "#src/x";
 
 export type Cfg = OAuthCfg & { publicOrigin: string; telegram?: { token: string; chatId: string } };
 export type Deps = { store: Store; fetch: Fetch; cfg: Cfg; now?: () => number; sleep?: (ms: number) => Promise<void>; random?: () => number };
-export type SyncResult = { skipped?: "paused" | "needs_reauth"; error?: string; pages: number; seen: number; downloaded: number; failed: number; bytes: number };
+export type SyncResult = {
+  skipped?: "paused" | "needs_reauth"; error?: string; pages: number; seen: number; downloaded: number; failed: number; bytes: number;
+  durationBackfill?: { checked: number; updated: number; unavailable: number };
+};
+export type PosterResult = "stored" | "existing" | "unavailable" | "failed";
+export type PosterBackfillResult = {
+  postersStored: number; postersExisting: number; postersUnavailable: number; posterFailures: number; nextAfter: string | null;
+};
 
 const now = (d: Deps) => (d.now ?? Date.now)();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -65,7 +72,7 @@ async function needsReauth(d: Deps, res: SyncResult): Promise<SyncResult> {
 function row(it: Item, status: BookmarkStatus, d: Deps, extra: Partial<BookmarkUpsert> = {}): BookmarkUpsert {
   return {
     post_id: it.postId, posted_at: it.postedAt, text: it.text, post_url: it.postUrl, has_video: it.hasVideoMedia ? 1 : 0,
-    status, error: null, r2_key: it.videos[0]?.key ?? null, bytes: null, preview_url: it.previewUrl, now: iso(now(d)), ...extra,
+    status, error: null, r2_key: it.videos[0]?.key ?? null, bytes: null, duration_ms: it.videos[0]?.durationMs ?? null, preview_url: it.previewUrl, now: iso(now(d)), ...extra,
   };
 }
 
@@ -84,7 +91,53 @@ async function download(d: Deps, it: Item, v: Video, maxFileBytes: number): Prom
   return { ok: true, bytes: len };
 }
 
-async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number; max: number }, maxFileBytes: number): Promise<void> {
+export async function ensurePoster(d: Deps, postId: string, previewUrl: string | null): Promise<PosterResult> {
+  if (!previewUrl) return "unavailable";
+  const fail = (reason: string): PosterResult => { console.error("poster capture failed", postId, reason); return "failed"; };
+  try {
+    if (!POST_ID_RE.test(postId)) return fail("invalid_post_id");
+    if (await d.store.has(posterKey(postId))) return "existing";
+    const u = new URL(previewUrl);
+    if (u.protocol !== "https:" || u.hostname !== "pbs.twimg.com" || u.username || u.password || u.port) return fail("invalid_url");
+    const res = await d.fetch(u.toString(), { redirect: "manual" });
+    if (!res.ok || !res.body) return fail(`http_${res.status}`);
+    const len = Number(res.headers.get("content-length")) || 0;
+    if (!Number.isSafeInteger(len) || len <= 0 || len > MAX_POSTER_BYTES) return fail(len > MAX_POSTER_BYTES ? "too_large" : "no_length");
+    const contentType = res.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (contentType !== "image/jpeg" && contentType !== "image/png" && contentType !== "image/webp") return fail("bad_type");
+    return await d.store.putPoster(postId, res.body, contentType) ? "stored" : "existing";
+  } catch (e) {
+    return fail(e instanceof Error ? e.name : "exception");
+  }
+}
+
+export async function backfillPosters(d: Deps, limit: number, after: string | null): Promise<PosterBackfillResult> {
+  const candidates = await d.store.listPosterSources(after, limit + 1);
+  const rows = candidates.slice(0, limit);
+  const out: PosterBackfillResult = { postersStored: 0, postersExisting: 0, postersUnavailable: 0, posterFailures: 0, nextAfter: candidates.length > limit ? rows.at(-1)!.post_id : null };
+  for (const row of rows) {
+    let result: PosterResult = "unavailable";
+    try {
+      if (row.r2_key && await d.store.has(row.r2_key)) result = await ensurePoster(d, row.post_id, row.preview_url);
+    } catch (e) {
+      console.error("poster backfill failed", row.post_id, e instanceof Error ? e.name : "exception");
+      result = "failed";
+    }
+    if (result === "stored") out.postersStored++;
+    else if (result === "existing") out.postersExisting++;
+    else if (result === "unavailable") out.postersUnavailable++;
+    else out.posterFailures++;
+  }
+  return out;
+}
+
+async function capturePoster(d: Deps, it: Item, budget: { posters: number }): Promise<void> {
+  if (budget.posters >= BACKFILL_MAX_POSTERS) return;
+  budget.posters++;
+  await ensurePoster(d, it.postId, it.previewUrl);
+}
+
+async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloads: number; max: number; posters: number }, maxFileBytes: number): Promise<void> {
   if (!it.hasVideoMedia) return d.store.upsertBookmark(row(it, "no_video", d));
   // A row with a permanent error — outright "failed", or "downloaded" partial (one video of a
   // multi-video post permanently failed) — is not retried unless the error is transient
@@ -92,7 +145,10 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   const prev = await d.store.getBookmark(it.postId);
   // Owner deleted it (ADR-0011): the tombstone overrides the R2 ledger — never re-download.
   if (prev?.deleted_at) return;
-  if (prev && prev.status !== "pending" && prev.error && !prev.error.startsWith("http_5")) return;
+  if (prev && prev.status !== "pending" && prev.error && !prev.error.startsWith("http_5")) {
+    if (prev.status === "downloaded" && prev.r2_key && await d.store.has(prev.r2_key)) await capturePoster(d, it, budget);
+    return;
+  }
   if (it.videos.length === 0) { res.failed++; return d.store.upsertBookmark(row(it, "failed", d, { error: "no_variants" })); }
   let bytes = 0, stored = 0, fail: Dl | null = null, firstStoredKey: string | null = null;
   for (const v of it.videos) {
@@ -109,11 +165,13 @@ async function processItem(d: Deps, it: Item, res: SyncResult, budget: { downloa
   }
   // r2_key must point at a video actually in R2 (index/video route serve straight from it) —
   // it.videos[0] is wrong whenever the first video is the one that permanently failed.
-  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey }));
+  const duration_ms = it.videos.find((v) => v.key === firstStoredKey)?.durationMs ?? null;
+  if (stored > 0) await capturePoster(d, it, budget);
+  if (stored === it.videos.length) return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, duration_ms }));
   // Partial: at least one video of a multi-video post is stored and the rest can never succeed —
   // record it as downloaded (with the failing video's error) instead of hiding the stored sibling
   // behind a "pending"/"failed" row that never lists it.
-  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, error: fail.error }));
+  if (stored > 0 && fail && !fail.ok && fail.status === "failed") return d.store.upsertBookmark(row(it, "downloaded", d, { bytes, r2_key: firstStoredKey, duration_ms, error: fail.error }));
   if (fail && !fail.ok) return d.store.upsertBookmark(row(it, fail.status, d, { error: fail.error, bytes: fail.bytes ?? null }));
   return d.store.upsertBookmark(row(it, "pending", d));
 }
@@ -138,22 +196,43 @@ async function breaker(d: Deps, e: XApiError, res: SyncResult): Promise<SyncResu
   return { ...res, error: e.message };
 }
 
-export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: number } = {}): Promise<SyncResult> {
+export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: number; durations?: boolean } = {}): Promise<SyncResult> {
   const res: SyncResult = { pages: 0, seen: 0, downloaded: 0, failed: 0, bytes: 0 };
   if ((await d.store.getPausedUntil()) > now(d)) return { ...res, skipped: "paused" };
 
-  const maxFileBytes = await d.store.getMaxFileBytes();
-  const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
-  const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
-  const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN };
   let paginationToken: string | undefined, resultCount = 0, sawMedia = false;
-  const hydratedPendingIds = new Set<string>();
   try {
     const access = await ensureAccessToken(d);
-    const userId = await d.store.getUserId();
-    if (!access || !userId) return needsReauth(d, res);
+    if (!access) return needsReauth(d, res);
 
-    const pendingIds = await d.store.listPendingIds(100);
+    if (o.durations) {
+      const missing = await d.store.listMissingDurations(BACKFILL_MAX_ITEMS);
+      let updated = 0;
+      for (let i = 0; i < missing.length; i += TWEET_LOOKUP_BATCH_SIZE) {
+        const batch = missing.slice(i, i + TWEET_LOOKUP_BATCH_SIZE);
+        const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, batch.map((r) => r.post_id)));
+        const byId = new Map(items.map((it) => [it.postId, it]));
+        res.pages++;
+        res.seen += items.length;
+        for (const row of batch) {
+          const durationMs = byId.get(row.post_id)?.videos.find((v) => v.key === row.r2_key)?.durationMs;
+          if (durationMs != null && await d.store.updateDuration(row.post_id, row.r2_key, durationMs)) updated++;
+        }
+      }
+      res.durationBackfill = { checked: missing.length, updated, unavailable: missing.length - updated };
+      await d.store.patchStatus({ lastRun: iso(now(d)), lastError: null, auth: "ok" });
+      for (const k of ["needs_reauth", "api_403", "api_429"]) await clearAlert(d, k);
+      return res;
+    }
+
+    const userId = await d.store.getUserId();
+    if (!userId) return needsReauth(d, res);
+    const maxFileBytes = await d.store.getMaxFileBytes();
+    const maxPages = o.backfill ? BACKFILL_MAX_REQUESTS : 1;
+    const pageSize = o.backfill ? BACKFILL_PAGE_SIZE : PAGE_SIZE;
+    const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN, posters: 0 };
+    const hydratedPendingIds = new Set<string>();
+    const pendingIds = await d.store.listPendingIds(TWEET_LOOKUP_BATCH_SIZE);
     if (pendingIds.length > 0) {
       const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, pendingIds));
       for (const it of items) {

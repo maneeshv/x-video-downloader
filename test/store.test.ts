@@ -7,7 +7,7 @@ import { FakeD1, FakeKV, FakeR2 } from "./fakes.ts";
 const mk = () => { const kv = new FakeKV(), r2 = new FakeR2(), d1 = new FakeD1(); return { kv, r2, d1, s: new Store(kv.asKV(), d1.asD1(), r2.asR2()) }; };
 const row = (over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) => ({
   post_id: "1", posted_at: "2026-08-01T00:00:00Z", text: "t", post_url: "https://x.com/i/status/1", has_video: 1 as const,
-  status: "pending" as const, error: null, r2_key: null, bytes: null, preview_url: null, now: "2026-08-29T00:00:00Z", ...over,
+  status: "pending" as const, error: null, r2_key: null, bytes: null, duration_ms: null, preview_url: null, now: "2026-08-29T00:00:00Z", ...over,
 });
 
 test("tokens, userId, status, pause round-trip through KV", async () => {
@@ -74,6 +74,14 @@ test("putVideo stores metadata as strings; has() reflects R2", async () => {
   assert.equal(r2.objects.get("1.mp4")!.contentType, "video/mp4");
 });
 
+test("poster storage uses the deterministic key and preserves image metadata", async () => {
+  const { s, r2 } = mk();
+  await s.putPoster("12345", new Response(new Uint8Array([0xff, 0xd8])).body!, "image/jpeg");
+  assert.equal(await s.putPoster("12345", new Response(new Uint8Array([1])).body!, "image/png"), null, "an overlapping capture cannot overwrite the immutable poster");
+  assert.equal(r2.objects.get("posters/12345")?.contentType, "image/jpeg");
+  assert.ok(await s.getPoster("12345", new Headers()));
+});
+
 test("library metadata migrations default owner-managed fields to unset", async () => {
   const { s } = mk();
   await s.upsertBookmark(row());
@@ -81,13 +89,20 @@ test("library metadata migrations default owner-managed fields to unset", async 
   assert.deepEqual([b.title, b.description, b.favorite, b.tags, b.deleted_at], [null, null, 0, null, null]);
 });
 
+test("migration 0003: duration defaults to unknown and upsert preserves known duration", async () => {
+  const { s } = mk();
+  await s.upsertBookmark(row({ duration_ms: 65000 }));
+  await s.upsertBookmark(row());
+  assert.equal((await s.getBookmark("1"))?.duration_ms, 65000);
+});
+
 const dl = (s: Store, post_id: string, over: Partial<Parameters<Store["upsertBookmark"]>[0]> = {}) =>
   s.upsertBookmark(row({ post_id, status: "downloaded", r2_key: `${post_id}.mp4`, ...over }));
 
 test("listLibrary filters by q and fav, sorts, and hides deleted rows", async () => {
   const { s } = mk();
-  await dl(s, "1", { text: "cats on mars", posted_at: "2026-08-01T00:00:00Z", bytes: 20 });
-  await dl(s, "2", { text: "dogs", posted_at: "2026-08-02T00:00:00Z", bytes: 10 });
+  await dl(s, "1", { text: "cats on mars", posted_at: "2026-08-01T00:00:00Z", bytes: 20, duration_ms: 30000 });
+  await dl(s, "2", { text: "dogs", posted_at: "2026-08-02T00:00:00Z", bytes: 10, duration_ms: 60000 });
   await dl(s, "3", { text: "zebra", posted_at: "2026-08-03T00:00:00Z" });
   await s.upsertBookmark(row({ post_id: "4", status: "pending", text: "cats pending" }));
   await s.updateMeta("2", { title: "Alpha", favorite: true }, "2026-08-30T00:00:00Z");
@@ -98,6 +113,8 @@ test("listLibrary filters by q and fav, sorts, and hides deleted rows", async ()
   assert.deepEqual(await ids({ sort: "title" }), ["2", "1", "3"], "title falls back to text; case-insensitive");
   assert.deepEqual(await ids({ sort: "largest" }), ["1", "2", "3"], "unknown sizes sort last");
   assert.deepEqual(await ids({ sort: "smallest" }), ["2", "1", "3"], "unknown sizes sort last");
+  assert.deepEqual(await ids({ sort: "longest" }), ["2", "1", "3"], "unknown durations sort last");
+  assert.deepEqual(await ids({ sort: "shortest" }), ["1", "2", "3"], "unknown durations sort last");
   assert.deepEqual(await ids({ q: "cats" }), ["3", "1"], "matches text or description, not pending rows");
   assert.deepEqual(await ids({ fav: true }), ["2"]);
   assert.deepEqual(await ids({ q: "alpha", fav: true }), ["2"]);
@@ -161,7 +178,7 @@ test("updateMeta is partial, stores empty strings as NULL, and touches only live
 test("markDeleted is idempotent and keeps the first timestamp; deleteVideos removes every sibling key", async () => {
   const { s, r2 } = mk();
   await dl(s, "1", { r2_key: "1-1.mp4" });
-  for (const k of ["1-1.mp4", "1-2.mp4", "10.mp4"]) await r2.put(k, new Uint8Array([1]));
+  for (const k of ["1-1.mp4", "1-2.mp4", "posters/1", "10.mp4"]) await r2.put(k, new Uint8Array([1]));
   assert.ok(await s.markDeleted("1", "2026-08-30T00:00:00Z"));
   assert.ok(await s.markDeleted("1", "2026-08-31T00:00:00Z"), "a repeat delete still reports a match");
   assert.equal((await s.getBookmark("1"))!.deleted_at, "2026-08-30T00:00:00Z");
@@ -195,6 +212,16 @@ test("listPendingIds returns the oldest pending rows first and respects its limi
   await s.upsertBookmark(row({ post_id: "1", now: "2026-08-01T00:00:00Z" }));
   await s.upsertBookmark(row({ post_id: "4", status: "failed", now: "2026-07-01T00:00:00Z" }));
   assert.deepEqual(await s.listPendingIds(2), ["1", "2"]);
+});
+
+test("listPosterSources selects live downloaded rows using a stable keyset", async () => {
+  const { s } = mk();
+  await dl(s, "11111", { preview_url: "https://pbs.twimg.com/a.jpg" });
+  await dl(s, "22222", { preview_url: "https://pbs.twimg.com/b.jpg" });
+  await dl(s, "33333", { preview_url: null });
+  await s.markDeleted("11111", "2026-09-02T00:00:00Z");
+  assert.deepEqual((await s.listPosterSources(null, 10)).map((x) => x.post_id), ["22222"]);
+  assert.deepEqual(await s.listPosterSources("22222", 10), []);
 });
 
 test("retry resets a failed row to pending and clears its error; other rows untouched", async () => {

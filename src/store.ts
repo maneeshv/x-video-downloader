@@ -4,9 +4,9 @@ import type { Tokens } from "#src/x";
 export type BookmarkStatus = "no_video" | "pending" | "downloaded" | "failed";
 export type BookmarkRow = {
   post_id: string; first_seen_at: string; posted_at: string | null; text: string | null; post_url: string;
-  has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null;
+  has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null; duration_ms: number | null;
   preview_url: string | null; updated_at: string;
-  // Library metadata (migrations 0002/0003, ADR-0011/0018). Owner-set; sync never writes them.
+  // Library metadata (migrations 0002/0003_tags, ADR-0011/0020). Owner-set; sync never writes them.
   title: string | null; description: string | null; favorite: 0 | 1; tags: string | null; deleted_at: string | null;
 };
 export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "tags" | "deleted_at"> & { now: string };
@@ -18,11 +18,13 @@ export type Status = {
 export type StatRow = { status: BookmarkStatus; error: string | null; deleted: 0 | 1; n: number; bytes: number };
 export type TagOption = { tag: string; count: number };
 export type VideoMeta = { postId: string; text: string; postUrl: string; postedAt: string | null; previewUrl: string | null; bitRate: number };
+export type MissingDuration = { post_id: string; r2_key: string };
+export const posterKey = (postId: string) => `posters/${postId}`;
 export const LIBRARY_PAGE_SIZES = [10, 20, 30, 50] as const;
 export type LibraryPageSize = typeof LIBRARY_PAGE_SIZES[number];
 export const DEFAULT_LIBRARY_PAGE_SIZE: LibraryPageSize = 10;
 export type LibraryQuery = {
-  q?: string; fav?: boolean; tags?: string[]; sort?: "newest" | "oldest" | "title" | "largest" | "smallest";
+  q?: string; fav?: boolean; tags?: string[]; sort?: "newest" | "oldest" | "title" | "largest" | "smallest" | "longest" | "shortest";
   page?: number; perPage?: LibraryPageSize;
 };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
@@ -33,6 +35,8 @@ const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   title: "COALESCE(title, text) COLLATE NOCASE ASC, post_id DESC",
   largest: "bytes IS NULL ASC, bytes DESC, post_id DESC",
   smallest: "bytes IS NULL ASC, bytes ASC, post_id DESC",
+  longest: "duration_ms IS NULL ASC, duration_ms DESC, post_id DESC",
+  shortest: "duration_ms IS NULL ASC, duration_ms ASC, post_id DESC",
 };
 const libraryFilter = ({ q, fav, tags }: LibraryQuery): { where: string; args: unknown[] } => {
   const clauses = ["status = 'downloaded'", "deleted_at IS NULL"], args: unknown[] = [];
@@ -49,13 +53,14 @@ const libraryFilter = ({ q, fav, tags }: LibraryQuery): { where: string; args: u
 };
 
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
-const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, preview_url, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, duration_ms, preview_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(post_id) DO UPDATE SET
   status      = CASE WHEN bookmarks.status = 'downloaded' THEN 'downloaded' ELSE excluded.status END,
   error       = CASE WHEN bookmarks.status = 'downloaded' THEN bookmarks.error ELSE excluded.error END,
   r2_key      = COALESCE(excluded.r2_key, bookmarks.r2_key),
   bytes       = COALESCE(excluded.bytes, bookmarks.bytes),
+  duration_ms = COALESCE(excluded.duration_ms, bookmarks.duration_ms),
   preview_url = COALESCE(excluded.preview_url, bookmarks.preview_url),
   posted_at   = COALESCE(excluded.posted_at, bookmarks.posted_at),
   text        = COALESCE(excluded.text, bookmarks.text),
@@ -103,7 +108,7 @@ export class Store {
 
   async upsertBookmark(r: BookmarkUpsert): Promise<void> {
     await this.db.prepare(UPSERT)
-      .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.preview_url, r.now)
+      .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.duration_ms, r.preview_url, r.now)
       .run();
   }
   getBookmark(postId: string): Promise<BookmarkRow | null> {
@@ -157,6 +162,24 @@ export class Store {
       .bind(limit).all<{ post_id: string }>();
     return results.map((r) => r.post_id);
   }
+  async listMissingDurations(limit: number): Promise<MissingDuration[]> {
+    const { results } = await this.db
+      .prepare("SELECT post_id, r2_key FROM bookmarks WHERE status = 'downloaded' AND duration_ms IS NULL AND r2_key IS NOT NULL AND deleted_at IS NULL ORDER BY post_id LIMIT ?")
+      .bind(limit).all<MissingDuration>();
+    return results;
+  }
+  async updateDuration(postId: string, r2Key: string, durationMs: number): Promise<boolean> {
+    const r = await this.db
+      .prepare("UPDATE bookmarks SET duration_ms = ? WHERE post_id = ? AND r2_key = ? AND status = 'downloaded' AND duration_ms IS NULL AND deleted_at IS NULL")
+      .bind(durationMs, postId, r2Key).run();
+    return r.meta.changes > 0;
+  }
+  async listPosterSources(after: string | null, limit: number): Promise<BookmarkRow[]> {
+    const { results } = await this.db
+      .prepare("SELECT * FROM bookmarks WHERE status = 'downloaded' AND deleted_at IS NULL AND preview_url IS NOT NULL AND post_id > ? ORDER BY post_id ASC LIMIT ?")
+      .bind(after ?? "", limit).all<BookmarkRow>();
+    return results;
+  }
   // failed → pending: sync() re-attempts pending rows the next time it sees the post (src/sync.ts processItem).
   async retry(postId: string, now: string): Promise<boolean> {
     const r = await this.db.prepare("UPDATE bookmarks SET status = 'pending', error = NULL, updated_at = ? WHERE post_id = ? AND status = 'failed'").bind(now, postId).run();
@@ -189,7 +212,7 @@ export class Store {
   // ponytail: X allows ≤4 media per post (key scheme in src/x.ts) and R2 ignores missing keys,
   // so name the sibling keys instead of paying a list() call.
   deleteVideos(postId: string): Promise<void> {
-    return this.r2.delete([`${postId}.mp4`, ...[1, 2, 3, 4].map((n) => `${postId}-${n}.mp4`)]);
+    return this.r2.delete([`${postId}.mp4`, ...[1, 2, 3, 4].map((n) => `${postId}-${n}.mp4`), posterKey(postId)]);
   }
 
   async has(key: string): Promise<boolean> { return (await this.r2.head(key)) !== null; }
@@ -203,5 +226,11 @@ export class Store {
   }
   getVideo(key: string, reqHeaders: Headers): Promise<R2ObjectBody | R2Object | null> {
     return this.r2.get(key, { range: reqHeaders, onlyIf: reqHeaders });
+  }
+  putPoster(postId: string, body: ReadableStream, contentType: string): Promise<R2Object | null> {
+    return this.r2.put(posterKey(postId), body, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: { contentType } });
+  }
+  getPoster(postId: string, reqHeaders: Headers): Promise<R2ObjectBody | R2Object | null> {
+    return this.r2.get(posterKey(postId), { onlyIf: reqHeaders });
   }
 }
