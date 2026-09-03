@@ -1,6 +1,12 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
+## 2026-09-03 — Deploy the discoverable Library tag picker
+- Did: owner explicitly requested deployment of implementation commit `fec7d5d`. Preflight confirmed a clean worktree, the `xrender.uk` custom-domain route and production Access values, the previous live version `75a92145`, and a green `npm run check` (both TypeScript projects, 73/73 tests, session protocol). `wrangler d1 migrations apply x-downloader --remote` reported no pending migrations. `npx wrangler deploy` published Worker version `8e3a04a2-4f19-4ee0-8c92-21d65b34de07` at 2026-09-03T06:46:43Z with the 30-minute cron and only `xrender.uk (custom domain)`; Wrangler then reported 100% traffic on that version. Unsandboxed route verification returned 302 from `xrender.uk/status` to the expected Cloudflare Access application and 404 from the old workers.dev route.
+- Decided: deployed the approved picker without another migration because ADR-0018's `0003_tags.sql` schema was already live and the upgrade changes only queries/API/UI.
+- Learned / gotcha: none.
+- Left undone: authenticated production UI smoke testing of existing-tag reuse, create-on-Enter/save, and two-tag filter → watch → Back. No real metadata was mutated during deployment verification.
+
 ## 2026-09-03 — Implement the approved Library tag picker
 - Did: replaced the live single-tag dropdown and comma-separated watch field with the approved focused picker model. The Library now exposes a compact `Tags N` trigger, searchable vocabulary with live counts, draft chips, disabled selected rows, Clear/Apply, repeated URL parameters, and exact case-insensitive AND filtering. The watch form lists the same vocabulary, prevents duplicates, accepts a new trimmed tag on Enter with a staged `New` marker, and submits the complete tag array on Save. Store discovery now collapses legacy case variants to the oldest live spelling and the API reuses that canonical casing. Added Store/route/render coverage; both TypeScript projects and all 73 tests pass.
 - Decided: no migration, tag table, dependency, or new ADR. ADR-0018's bounded JSON array remains the persistence model; the approved spec owns the new selection/URL behavior. Production keeps the existing x-downloader shell rather than the mock's invented navigation and editor modal.
