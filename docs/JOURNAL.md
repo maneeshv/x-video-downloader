@@ -1,11 +1,11 @@
 # Journal
 Append-only, newest first. Template in `docs/STANDARDS.md`.
 
-## 2026-09-03 — Specify the Library tag picker redesign
+## 2026-09-03 — Specify and approve the Library tag picker redesign
 - Did: translated the owner-selected visual option 3 into a proposed interaction specification covering the Library multi-tag popover, AND semantics, repeated URL parameters, discoverable global vocabulary with counts, watch-page combobox, create-on-Enter staging, save behavior, limits, keyboard/accessibility, responsive states, server changes, acceptance criteria, and verification. Saved the selected generated mock beside the spec as its interaction reference.
 - Decided: the mock controls the tag-picker hierarchy only; production keeps the existing x-downloader shell. Library selections are draft-until-Apply; video assignments are draft-until-Save. Existing JSON tag storage remains and needs no migration.
 - Learned / gotcha: none.
-- Left undone: spec remains PROPOSED for owner review; no implementation or deployment in this session.
+- Left undone: the owner approved the spec on 2026-09-03; implementation planning, implementation, and deployment remain separate follow-up work.
 
 ## 2026-09-03 — Add and deploy tagging to the Library
 - Did: added migration `0003_tags.sql`; watch-page comma-separated tag editing; bounded API validation; JSON-backed Store persistence; tag-aware free-text search; an exact case-insensitive Library tag filter; card chips; URL-state preservation; and focused Store/route/render tests. Updated PRODUCT and ARCHITECTURE for the scope and schema change. Both TypeScript projects typecheck and all 73 tests pass. Committed as `f0749f7`, applied and verified the remote D1 migration, then deployed Worker version `75a92145-80e4-474d-9992-827bb916f954` at 2026-09-03T04:18:24Z. Wrangler reports 100% traffic on that version; `xrender.uk/status` returns the expected Access 302 and the workers.dev route returns 404.

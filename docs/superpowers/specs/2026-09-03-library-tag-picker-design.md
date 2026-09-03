@@ -1,8 +1,11 @@
 # Library tag picker
 
-Status: PROPOSED  
-Date: 2026-09-03  
-Selected direction: visual option 3, “Focused tag manager popover”  
+Status: APPROVED
+
+Date: 2026-09-03
+
+Selected direction: visual option 3, “Focused tag manager popover”
+
 Visual reference: [option 3 mock](assets/2026-09-03-library-tag-picker-option-3.png)
 
 ## 1. Problem
