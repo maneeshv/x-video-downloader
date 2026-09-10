@@ -7,9 +7,9 @@ export type BookmarkRow = {
   has_video: 0 | 1; status: BookmarkStatus; error: string | null; r2_key: string | null; bytes: number | null; duration_ms: number | null;
   preview_url: string | null; updated_at: string;
   // Library metadata (migrations 0002/0003_tags, ADR-0011/0020). Owner-set; sync never writes them.
-  title: string | null; description: string | null; favorite: 0 | 1; tags: string | null; deleted_at: string | null;
+  title: string | null; description: string | null; favorite: 0 | 1; tags: string | null; deleted_at: string | null; resume_ms?: number | null;
 };
-export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "tags" | "deleted_at"> & { now: string };
+export type BookmarkUpsert = Omit<BookmarkRow, "first_seen_at" | "updated_at" | "title" | "description" | "favorite" | "tags" | "deleted_at" | "resume_ms"> & { now: string };
 export type Status = {
   lastRun?: string; lastError?: string | null; auth?: "ok" | "needs_reauth"; counts?: Record<string, number>;
   totalBytes?: number; noMediaRuns?: number; alerts?: Record<string, string>;
@@ -28,7 +28,7 @@ export type LibraryQuery = {
   page?: number; perPage?: LibraryPageSize;
 };
 // A key present means "set it"; "" stores NULL. Callers validate types/lengths (src/index.ts).
-export type MetaPatch = { title?: string; description?: string; favorite?: boolean; tags?: string[] };
+export type MetaPatch = { title?: string; description?: string; favorite?: boolean; tags?: string[]; resume_ms?: number };
 const LIBRARY_ORDER: Record<NonNullable<LibraryQuery["sort"]>, string> = {
   newest: "posted_at DESC, post_id DESC",
   oldest: "posted_at ASC, post_id ASC",
@@ -196,6 +196,7 @@ export class Store {
     if (p.description !== undefined) { sets.push("description = ?"); args.push(p.description || null); }
     if (p.favorite !== undefined) { sets.push("favorite = ?"); args.push(p.favorite ? 1 : 0); }
     if (p.tags !== undefined) { sets.push("tags = ?"); args.push(p.tags.length ? JSON.stringify(p.tags) : null); }
+    if (p.resume_ms !== undefined) { sets.push("resume_ms = ?"); args.push(p.resume_ms || null); }
     sets.push("updated_at = ?"); args.push(now);
     const r = await this.db
       .prepare(`UPDATE bookmarks SET ${sets.join(", ")} WHERE post_id = ? AND status = 'downloaded' AND deleted_at IS NULL`)
