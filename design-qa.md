@@ -47,7 +47,7 @@ The ignored local preview calls the production request handler using existing D1
 
 **Open questions and limits**
 
-No design questions remain. Physical-device keyboards, reduced-motion emulation, and authenticated production smoke tests were not performed. The reduced-motion stylesheet remains intact. No deployment was made.
+No design questions remain. Physical-device keyboards, reduced-motion emulation, and authenticated production smoke tests were not performed. The reduced-motion stylesheet remains intact. This visual QA preceded deployment. The 2026-09-11 deployment follow-up recovered the exact existing production Watch renderer and playback/resume/cache behavior (ADR-0022); 89 tests pass. Library visuals are unchanged. Deployment verification and the authenticated-browser limitation are recorded in docs/STATUS.md.
 
 **Implementation checklist**
 
