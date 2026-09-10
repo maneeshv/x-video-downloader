@@ -1,6 +1,7 @@
 Updated: 2026-09-11
 
 ## Now
+- Deployment authorized; preflight is preserving playback features from the live 2026-09-04 Worker that were absent from Git. The recovered resume migration is already applied in production.
 - **Option 1 is implemented and verified on `feat/library-cinematic-shelf`:** the [Cinematic shelf plan](superpowers/plans/2026-09-11-cinematic-shelf-library.md) is complete. Existing search, tags, sorts, pagination, Watch editing, Stats, and access controls are preserved. Both TypeScript projects and all 88 tests pass; desktop/mobile comparison and interaction evidence is in [design-qa.md](../design-qa.md).
 - **Implementation includes PR #32:** the branch starts from `fd93d1b`, incorporating the [approved tag picker](superpowers/specs/2026-09-03-library-tag-picker-design.md), duration sorting, durable private posters, and exact-email authorization.
 - **Last recorded deployment remains `4d969b9d-8ae9-4747-8561-6065f990c9df`:** the cinematic UI has not been deployed. The 2026-09-11 checks used local synthetic data only; see [JOURNAL](JOURNAL.md).

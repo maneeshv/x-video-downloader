@@ -48,6 +48,7 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
     // R2 throws on an unsatisfiable Range (start ≥ size); only a Range request can hit that, so
     // any other throw (a real R2/network fault) must propagate instead of being reported as 416.
     if (!req.headers.has("range")) throw e;
+    console.error("video range", key, e);
     return new Response(null, { status: 416 });
   }
   if (!obj) return new Response("not found", { status: 404 });
@@ -55,6 +56,8 @@ async function video(store: Store, key: string, req: Request): Promise<Response>
   obj.writeHttpMetadata(headers);
   headers.set("etag", obj.httpEtag);
   headers.set("accept-ranges", "bytes");
+  headers.set("cache-control", "private, max-age=31536000, immutable");
+  headers.set("x-content-type-options", "nosniff");
   // R2's onlyIf drops the body when the conditional matches — that's a cache-revalidation
   // success (304 for If-None-Match or If-Modified-Since), not a precondition failure (412) —
   // reserve 412 for other onlyIf mismatches (e.g. If-Match / If-Unmodified-Since).
@@ -98,6 +101,10 @@ function parseMetaPatch(b: unknown): MetaPatch | null {
     const normalized = o.tags.map((tag) => tag.trim());
     if (normalized.some((tag) => !tag || tag.length > TAG_MAX)) return null;
     p.tags = normalized.filter((tag, i, all) => all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === i);
+  }
+  if ("resume_ms" in o) {
+    if (typeof o.resume_ms !== "number" || !Number.isSafeInteger(o.resume_ms) || o.resume_ms < 0) return null;
+    p.resume_ms = o.resume_ms;
   }
   return Object.keys(p).length ? p : null;
 }

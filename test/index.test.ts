@@ -109,7 +109,8 @@ test("viewer HTML is visibly read-only and contains no owner controls or scripts
   assert.match(watch, /View only/);
   assert.match(watch, /Viewer &lt;description&gt;/);
   assert.doesNotMatch(watch, /Viewer <description>/);
-  assert.doesNotMatch(watch, /id="meta"|id="fav"|id="del"|\/api\/videos\/|<script>/);
+  assert.doesNotMatch(watch, /id="meta"|id="fav"|id="del"|\/api\/videos\//);
+  assert.match(watch, /resumeMs=0,save=null/, "viewer playback controls cannot save owner progress");
   assert.match(watch, /download/);
 });
 
@@ -327,6 +328,28 @@ test("POST /api/videos/:id validates, then updates title/description/favorite/ta
   const b = (await a.store.getBookmark("12345"))!;
   assert.deepEqual([b.title, b.description, b.favorite, b.tags], ["T", "D", 1, '["Tutorial","Design"]']);
   assert.equal((await a.send("/api/videos/12345", { method: "PUT" })).status, 405);
+});
+
+test("deployment retains production playback resume, speed controls and private video caching", async () => {
+  const a = await seeded();
+  assert.equal((await jsonPost(a, "/api/videos/12345", { resume_ms: 12000 })).status, 204);
+  assert.equal((await a.store.getBookmark("12345"))!.resume_ms, 12000);
+  for (const resume_ms of [-1, 1.5, "12000", Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal((await jsonPost(a, "/api/videos/12345", { resume_ms })).status, 400);
+  }
+  const owner = await (await a.get("/watch/12345")).text();
+  assert.match(owner, /aria-label="Playback speed"/);
+  assert.match(owner, /resumeMs=12000/);
+  assert.match(owner, /preload="metadata"/);
+  assert.doesNotMatch(owner, /<video[^>]*autoplay/);
+  const viewer = await (await a.as(a.viewerJwt, "/watch/12345")).text();
+  assert.match(viewer, /aria-label="Playback speed"/);
+  assert.match(viewer, /resumeMs=0,save=null/);
+  assert.equal((await jsonPost(a, "/api/videos/12345", { resume_ms: 0 })).status, 204);
+  assert.equal((await a.store.getBookmark("12345"))!.resume_ms, null);
+  const video = await a.get("/v/12345.mp4");
+  assert.equal(video.headers.get("cache-control"), "private, max-age=31536000, immutable");
+  assert.equal(video.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("DELETE /api/videos/:id removes every R2 key, tombstones the row, and is idempotent", async () => {

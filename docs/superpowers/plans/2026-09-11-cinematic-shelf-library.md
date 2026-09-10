@@ -8,6 +8,8 @@ Date: 2026-09-11 | Execution authorized by the owner's selection of Option 1.
 
 **Tech stack:** Existing TypeScript Worker, native HTML/CSS, node:test.
 
+Deployment addendum (2026-09-11, owner explicitly requested deploy): recover the live-only playback behavior before publishing. Regression was red before recovery; verify all non-HTML runtime modules and the Watch renderer exactly match the live bundle. Retain the production bindings and already-applied resume migration. Record the new version and smoke-check Access after deployment.
+
 - [x] Add a failing navigation regression to test/index.test.ts: render a query with q, fav, two tags, sort, page=3, perPage=20; inspect Library/Favourites hrefs and active state. Both preserve non-favourite filters and reset page. Check owner/viewer links and reauthorization visibility.
 - [x] Change the existing duration rendering test to assert a labelled poster badge and retained file-size/unknown-duration output. Run `node --no-warnings --test --test-name-pattern='cinematic|duration' test/index.test.ts`; confirm assertion failures before implementation.
 - [x] In src/html.ts, add the static SVG subset and Library-only navigation, use `link({ fav: false, page: 1 })` / `link({ fav: true, page: 1 })`, remove the duplicate toolbar favourites link, move duration into the poster, and scope responsive rail/grid styles to the Library. Retain form names/IDs and hidden fav/tag parameters.

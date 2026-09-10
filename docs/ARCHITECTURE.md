@@ -20,6 +20,13 @@ and favourite status remain available. Below 1000px navigation moves above the c
 Watch and Stats layouts, tag picker, server routes, and authorization remain unchanged. This UI is
 implemented on `feat/library-cinematic-shelf`; deployment status is tracked in `docs/STATUS.md`.
 
+Watch also preserves the recovered production playback controls (ADR-0022): native playback starts
+on user action with metadata preload, speed ranges from 0.5× to 2×, and keyboard shortcuts support
+play/pause, seeking, mute, fullscreen, and speed. Owners save `resume_ms` on pause/end/pagehide through
+the existing metadata endpoint; viewers have playback controls but no progress writes. Video responses
+retain private immutable caching and `nosniff`. Migration `0004_resume.sql` adds nullable INTEGER
+`resume_ms`; production had already applied it before the 2026-09-11 source recovery.
+
 ## Runtime
 - `[triggers] crons = ["*/30 * * * *"]` — `scheduled()` calls `sync(deps, {})` (cron mode: 1 page, `PAGE_SIZE=20`).
 - `fetch()` — `handle()` in `src/index.ts`, one Access-gated router.
