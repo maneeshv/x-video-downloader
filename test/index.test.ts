@@ -264,10 +264,47 @@ test("html escapes text", async () => {
   assert.match(out, /&lt;script&gt;/);
 });
 
-test("library cards show video duration alongside file size", async () => {
+test("library cards show duration on the poster and retain file size", async () => {
   const { renderIndex } = await import("#src/html");
   const row = { post_id: "1", first_seen_at: "2026-08-29T00:00:00Z", posted_at: null, text: "t", post_url: "https://x.com/i/status/1", has_video: 1, status: "downloaded", error: null, r2_key: "1.mp4", bytes: 5 * 1024 ** 2, duration_ms: 65000, preview_url: null, updated_at: "", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const;
-  assert.match(renderIndex([row], {}), /5\.0 MB<\/span><span class="separator">·<\/span><span>1:05<\/span>/);
+  const html = renderIndex([row], {});
+  assert.ok(html.includes('class="duration-badge" aria-label="Duration: 1:05">1:05</span>'));
+  assert.ok(html.includes('5.0 MB</span>'));
+  assert.ok(renderIndex([{ ...row, duration_ms: null }], {}).includes('Duration unavailable</span>'));
+});
+
+test("cinematic navigation preserves Library filters and scopes owner actions", async () => {
+  const { renderIndex } = await import("#src/html");
+  const q = { q: "hello", tags: ["Tutorial", "Design"], sort: "longest", page: 3, perPage: 20 } as const;
+  for (const fav of [false, true]) {
+    const html = renderIndex([], { lastRun: "2026-09-11T00:00:00Z", auth: "needs_reauth" }, { ...q, tags: [...q.tags], fav }, 0);
+    const navigation = html.match(/<nav[^>]*aria-label="Library navigation"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+    assert.ok(navigation, "Library and Favourites are navigation links");
+    for (const [view, expectedFav] of [["library", false], ["favourites", true]] as const) {
+      const anchor: string | undefined = navigation.match(new RegExp('<a[^>]*data-library-view="' + view + '"[^>]*>'))?.[0];
+      assert.ok(anchor, view);
+      const href: string | undefined = anchor.match(/href="([^"]+)"/)?.[1];
+      assert.ok(href);
+      const params: URLSearchParams = new URL(href.replaceAll("&amp;", "&"), ORIGIN).searchParams;
+      assert.equal(params.get("q"), "hello");
+      assert.deepEqual(params.getAll("tag"), ["Tutorial", "Design"]);
+      assert.equal(params.get("sort"), "longest");
+      assert.equal(params.get("perPage"), "20");
+      assert.equal(params.get("page"), null, "switching view resets page");
+      assert.equal(params.get("fav"), expectedFav ? "1" : null);
+      assert.equal(anchor.includes('aria-current="page"'), fav === expectedFav);
+    }
+    assert.ok(html.includes('href="/stats"'));
+    assert.ok(html.includes('href="/oauth/start"'));
+    assert.ok(html.includes('href="/cdn-cgi/access/logout"'));
+    const form = html.match(/<form class="library-controls"[\s\S]*?<\/form>/)?.[0];
+    assert.ok(form);
+    assert.equal(form.includes('name="fav"'), fav, "Search and Apply retain favourites");
+    assert.ok(!form.includes("Favourites only"), "no duplicate favourites filter");
+  }
+  const viewer = renderIndex([], { auth: "needs_reauth" }, {}, 0, false);
+  assert.match(viewer, /View only/);
+  assert.doesNotMatch(viewer, /href="\/stats"|href="\/oauth\/start"/);
 });
 
 test("POST /api/videos/:id validates, then updates title/description/favorite/tags", async () => {
@@ -356,7 +393,7 @@ test("/ paginates by 10, clamps pages, and allows up to 50 videos", async () => 
   assert.equal((h.match(/class="video-card"/g) ?? []).length, 10, "default page size");
   assert.match(h, /1–10 of 12 videos/);
   assert.match(h, /name="perPage"/);
-  assert.match(h, /<option value="50">50<\/option>/);
+  assert.match(h, /<option value="50">50 per page<\/option>/);
   assert.match(h, /href="\/\?page=2"/);
   h = await html("/?page=2");
   assert.equal((h.match(/class="video-card"/g) ?? []).length, 2);
@@ -366,7 +403,7 @@ test("/ paginates by 10, clamps pages, and allows up to 50 videos", async () => 
   assert.match(h, /aria-current="page">2<\/a>/);
   h = await html("/?perPage=50");
   assert.equal((h.match(/class="video-card"/g) ?? []).length, 12);
-  assert.match(h, /<option value="50" selected>50<\/option>/);
+  assert.match(h, /<option value="50" selected>50 per page<\/option>/);
   h = await html("/?perPage=999");
   assert.equal((h.match(/class="video-card"/g) ?? []).length, 10, "invalid page size falls back to 10");
 });

@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-Updated: 2026-09-03
+Updated: 2026-09-11
 
 Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
 (ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Access uses the
@@ -12,6 +12,13 @@ delete (ADR-0011); since 2026-09-02 it also uses URL-backed pagination and resto
 card after a watch-page round trip (ADR-0016).
 Posters are copied from X into the existing private R2 bucket and served through the authenticated
 Worker, so library rendering no longer depends on X's CDN (ADR-0018).
+
+The implemented Library uses a desktop navigation rail and a responsive poster grid (ADR-0021).
+Library and Favourites are views of the same URL-backed query, retaining search, tags, sort, and
+page size while resetting pagination. Duration appears on each poster; titles, dates, sizes, tags,
+and favourite status remain available. Below 1000px navigation moves above the content. The existing
+Watch and Stats layouts, tag picker, server routes, and authorization remain unchanged. This UI is
+implemented on `feat/library-cinematic-shelf`; deployment status is tracked in `docs/STATUS.md`.
 
 ## Runtime
 - `[triggers] crons = ["*/30 * * * *"]` — `scheduled()` calls `sync(deps, {})` (cron mode: 1 page, `PAGE_SIZE=20`).
@@ -115,4 +122,4 @@ for Access tests), `fixture()` (loads `test/fixtures/*.json`).
 bucket), 0005 (hard caps + circuit breaker as code constants), 0006 (TypeScript/wrangler/`node
 --test`, `#src/*` imports), 0007 (D1 indexes every bookmark), 0008 (single Worker, no queue),
 0009 (refuse unknown-length video bodies instead of buffering), 0011 (library metadata in D1;
-delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling), 0018 (private durable posters in R2 under deterministic keys), 0019 (exact-email viewers and Worker owner authorization), 0020 (bounded JSON-array tags in D1).
+delete tombstone overrides the R2 ledger), 0012 (Custom Domain `xrender.uk`, workers.dev off), 0013 (`/stats` page over D1; retry resets a row to pending), 0014 (Claude Code hooks gate every Stop against the session protocol — tooling, not runtime), 0015 (owner-adjustable file-size operating limit), 0016 (URL-backed library pagination and return position), 0017 (5 GiB immutable file-size ceiling), 0018 (private durable posters in R2 under deterministic keys), 0019 (exact-email viewers and Worker owner authorization), 0020 (bounded JSON-array tags in D1), 0021 (cinematic Library navigation and static icons).
