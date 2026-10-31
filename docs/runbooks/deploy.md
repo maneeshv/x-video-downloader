@@ -1,5 +1,5 @@
 # Deploy the Worker
-When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-09-03
+When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-10-31
 
 `wrangler.toml` is local and gitignored (copy `wrangler.toml.example`, fill in real ids). Network
 `wrangler`/`npm` calls need the Bash sandbox off (EPERM otherwise).
